@@ -1,0 +1,100 @@
+#ifndef TOK
+#define TOK(X)
+#endif
+
+#ifndef OPERATOR
+#define OPERATOR(X, Y) TOK(X)
+#endif
+
+#ifndef KEYWORD
+#define KEYWORD(X) TOK(kw_ ## X)
+#endif
+
+TOK(eof)
+TOK(unexpected)
+
+TOK(name)
+TOK(real)
+TOK(string)
+
+OPERATOR(l_brace, "{")
+OPERATOR(r_brace, "}")
+OPERATOR(l_paren, "(")
+OPERATOR(r_paren, ")")
+OPERATOR(l_square, "[")
+OPERATOR(r_square, "]")
+
+OPERATOR(equals, "=")
+
+OPERATOR(less, "<")
+OPERATOR(less_equals, "<=")
+OPERATOR(is_equals, "==")
+OPERATOR(not_equals, "!=")
+OPERATOR(greater_equals, ">=")
+OPERATOR(greater, ">")
+
+OPERATOR(plus_equals, "+=")
+OPERATOR(minus_equals, "-=")
+OPERATOR(times_equals, "*=")
+OPERATOR(div_equals, "/=")
+OPERATOR(and_equals, "&=")
+OPERATOR(or_equals, "|=")
+OPERATOR(xor_equals, "^=")
+
+OPERATOR(comma, ",")
+OPERATOR(dot, ".")
+OPERATOR(semicolon, ";")
+
+OPERATOR(plus, "+")
+OPERATOR(minus, "-")
+OPERATOR(times, "*")
+OPERATOR(divide, "/")
+
+OPERATOR(exclaim, "!")
+OPERATOR(tilde, "~")
+
+OPERATOR(ampamp, "&&")
+OPERATOR(pipepipe, "||")
+OPERATOR(caretcaret, "^^")
+
+OPERATOR(bit_and, "&")
+OPERATOR(bit_or, "|")
+OPERATOR(bit_xor, "^")
+OPERATOR(shift_left, "<<")
+OPERATOR(shift_right, ">>")
+
+KEYWORD(div)
+KEYWORD(mod)
+
+KEYWORD(true)
+KEYWORD(false)
+
+KEYWORD(self)
+KEYWORD(other)
+KEYWORD(all)
+KEYWORD(noone)
+
+KEYWORD(global)
+KEYWORD(globalvar)
+KEYWORD(var)
+
+KEYWORD(if)
+KEYWORD(then)
+KEYWORD(else)
+KEYWORD(repeat)
+KEYWORD(while)
+KEYWORD(do)
+KEYWORD(until)
+KEYWORD(for)
+KEYWORD(switch)
+KEYWORD(case)
+KEYWORD(default)
+KEYWORD(break)
+KEYWORD(continue)
+KEYWORD(exit)
+KEYWORD(return)
+KEYWORD(with)
+
+#undef KEYWORD
+#undef OPERATOR
+#undef TOK
