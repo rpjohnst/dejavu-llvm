@@ -73,8 +73,8 @@ KEYWORD(self)
 KEYWORD(other)
 KEYWORD(all)
 KEYWORD(noone)
-
 KEYWORD(global)
+
 KEYWORD(globalvar)
 KEYWORD(var)
 

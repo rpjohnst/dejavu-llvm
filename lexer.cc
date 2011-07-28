@@ -1,5 +1,4 @@
 #include "lexer.h"
-#include <cstdlib>
 #include <map>
 #include <sstream>
 #include <string>

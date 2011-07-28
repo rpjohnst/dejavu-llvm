@@ -5,11 +5,8 @@
 #include <fcntl.h>
 #include "disallow_copy.h"
 
-class file_open_error : public std::exception {
-public:
+struct file_open_error : public std::exception {
 	explicit file_open_error(int e) : std::exception(), error(e) {}
-
-private:
 	int error;
 };
 
