@@ -43,6 +43,7 @@ OPERATOR(xor_equals, "^=")
 
 OPERATOR(comma, ",")
 OPERATOR(dot, ".")
+OPERATOR(colon, ":")
 OPERATOR(semicolon, ";")
 
 OPERATOR(plus, "+")
@@ -87,13 +88,13 @@ KEYWORD(do)
 KEYWORD(until)
 KEYWORD(for)
 KEYWORD(switch)
+KEYWORD(with)
 KEYWORD(case)
 KEYWORD(default)
 KEYWORD(break)
 KEYWORD(continue)
 KEYWORD(exit)
 KEYWORD(return)
-KEYWORD(with)
 
 #undef KEYWORD
 #undef OPERATOR

@@ -24,7 +24,7 @@ bool isname(char c) {
 bool isoperator(char c) {
 	switch (c) {
 	case '{': case '}': case '(': case ')': case '[': case ']':
-	case '.': case ',': case ';':
+	case '.': case ',': case ':': case ';':
 	case '+': case '-': case '*': case '/':
 	case '|': case '&': case '^': case '~':
 	case '=': case '<': case '>':
@@ -195,6 +195,11 @@ token token_stream::getoperator() {
 	case ',': t.type = comma; return t;
 	case '.': t.type = dot; return t;
 	case ';': t.type = semicolon; return t;
+	case ':':
+		switch (*current) {
+		case '=': col++; current++; t.type = equals; return t;
+		default: t.type = colon; return t;
+		}
 	
 	case '~': t.type = tilde; return t;
 	

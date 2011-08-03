@@ -1,13 +1,10 @@
-asdf + foo * 3 + "asdf" div $abc
-foo = bar && baz(qux, "foo", $baf)
-asdf[3 + 2] - (-foo + 3) / !bar.asdf
-
 /* this is a comment summarizing the script */
 
-var foo, bar, baz, qux;
+var foo, bar, baz qux;;
 foo = 3
-bar = foo + 3;
-baz = foo * (2 - bar) + "asdf"
+bar = foo + 3;;;
+(instance_create(x, y, object_index)).asdf = 3;
+(100001).asdf[3] = "asdf"
 
 qux[] = foo
 qux[0] = bar
@@ -23,7 +20,8 @@ begin
 	var bla;
 	bla = 0 | 3 & $00fAe
 	
-	if (bar == 6) { bla = ~bla }
+	if (bar == 6)
+		bla = ~bla
 }
 else if (foo != 3)
 begin
@@ -32,12 +30,21 @@ begin
 	end
 end
 else
-	if (false) exit;
+	if (false) {/*exit;*/}
 
-for (asdf = 4; asdf < 5; asdf += 1) {
+for (asdf = 4;; asdf < 5; asdf += 1) {
 	switch (asdf + 2) {
 	case 6: with (asdf) do_something(); break;
-	case 7: return;
-	default: die();
+	case 7: return 0;
+	default: while something do die();
 	}
-}
+	continue;;
+};;;;;
+
+do {
+	with other do stuff();
+	repeat 6 test();
+} until (foo)
+
+for (asdf = 4 asdf < 5 asdf += 1;;;;;)
+	break

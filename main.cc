@@ -34,7 +34,7 @@ void print_token(const token& t) {
 	}
 }
 
-struct expression_printer : public expression::visitor {
+struct ast_printer : public node::visitor {
 	void visit(value *v) {
 		print_token(v->t);
 	}
@@ -69,25 +69,119 @@ struct expression_printer : public expression::visitor {
 		});
 		printf(")");
 	}
+	
+	void visit(assignment *a) {
+		a->lvalue->accept(this);
+		print_token(token(a->op, 0, 0));
+		a->rvalue->accept(this);
+		printf(";");
+	}
+	
+	void visit(invocation* i) {
+		i->c->accept(this);
+	}
+	
+	void visit(declaration *d) {
+		printf("var ");
+		std::for_each(d->names.begin(), d->names.end(), [&](value* v) {
+			v->accept(this);
+			printf(", ");
+		});
+		printf("; ");
+	}
+	
+	void visit(block *b) {
+		printf("{\n");
+		std::for_each(b->stmts.begin(), b->stmts.end(), [&](statement* s) {
+			s->accept(this);
+			printf("\n");
+		});
+		printf("}");
+	}
+	
+	void visit(ifstatement *i) {
+		printf("if "); i->cond->accept(this); printf("\n");
+		i->branch_true->accept(this);
+		if (i->branch_false) {
+			printf("\n");
+			printf("else "); printf("\n");
+			i->branch_false->accept(this);
+		}
+	}
+	
+	void visit(whilestatement *w) {
+		printf("while "); w->cond->accept(this); printf("\n");
+		w->stmt->accept(this);
+	}
+	
+	void visit(dostatement *d) {
+		printf("do "); printf("\n");
+		d->stmt->accept(this); printf("\n");
+		printf("until "); d->cond->accept(this);
+	}
+	
+	void visit(repeatstatement *r) {
+		printf("repeat "); r->expr->accept(this); printf("\n");
+		r->stmt->accept(this);
+	}
+	
+	void visit(forstatement *f) {
+		printf("for (");
+			f->init->accept(this);
+			f->cond->accept(this); printf("; ");
+			f->inc->accept(this);
+		printf(")\n");
+		f->stmt->accept(this);
+	}
+	
+	void visit(switchstatement *s) {
+		printf("switch "); s->expr->accept(this); printf("\n");
+		s->stmts->accept(this);
+	}
+	
+	void visit(withstatement *w) {
+		printf("with "); w->expr->accept(this); printf("\n");
+		w->stmt->accept(this);
+	}
+	
+	void visit(jump *j) {
+		print_token(token(j->type, 0, 0));
+	}
+	
+	void visit(returnstatement *r) {
+		printf("return ");
+		r->expr->accept(this);
+	}
+	
+	void visit(casestatement *c) {
+		if (c->expr) {
+			printf("case ");
+			c->expr->accept(this);
+		}
+		else
+			printf("default");
+		
+		printf(": ");
+	}
 };
 
 void test_parser() {
 	file_buffer file(file_descriptor("parser.gml", O_RDONLY));
 	token_stream tokens(file);
 	parser parser(tokens);
-	expression_printer p;
+	ast_printer p;
 	
 	try {
-		while (true) {
-			expression *expr = parser.getexpression();
-			expr->accept(&p); printf("\n"); fflush(stdout);
-			delete expr;
-		}
+		node *program = parser.getprogram();
+		program->accept(&p); printf("\n");
+		delete program;
 	}
 	catch (unexpected_token_error& e) {
-		printf("unexpected ");
-		print_token(e.tok);
-		printf("\n");
+		printf(
+			":%lu:%lu: error: unexpected '%.*s'\n",
+			e.tok.row, e.tok.col,
+			(int)e.tok.string.length, e.tok.string.data
+		);
 	}
 }
 
