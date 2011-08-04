@@ -178,10 +178,19 @@ void test_parser() {
 	}
 	catch (unexpected_token_error& e) {
 		printf(
-			":%lu:%lu: error: unexpected '%.*s'\n",
-			e.tok.row, e.tok.col,
-			(int)e.tok.string.length, e.tok.string.data
+			":%lu:%lu: error: unexpected ",
+			e.unexpected.row, e.unexpected.col
 		);
+		print_token(e.unexpected);
+		
+		if (e.expected.size() > 0) {
+			printf("; expected ");
+			std::for_each(e.expected.begin(), e.expected.end(), [](token_type t) {
+				print_token(token(t, 0, 0));
+				printf("or ");
+			});
+		}
+		printf("\n");
 	}
 }
 

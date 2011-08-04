@@ -81,7 +81,10 @@ token token_stream::gettoken() {
 			current += 2;
 			col += 2;
 			
-			while (*current++ != '*' || *current != '/') {
+			while (
+				(*current++ != '*' || *current != '/') &&
+				(current + 1 != buffer_end)
+			) {
 				col++;
 				if (isnewline(*current)) {
 					skipnewline();

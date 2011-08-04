@@ -46,12 +46,22 @@ private:
 expression *parser::getexpression(int prec) {
 	token t = current;
 	current = lexer.gettoken();
-	expression *left = (this->*symbols[t.type].nud)(t);
+	
+	nud_parser n = symbols[t.type].nud;
+	if (!n) {
+		throw unexpected_token_error(t);
+	}
+	expression *left = (this->*n)(t);
 	
 	while (prec < symbols[current.type].precedence) {
 		t = current;
 		current = lexer.gettoken();
-		left = (this->*symbols[t.type].led)(t, left);
+		
+		led_parser l = symbols[t.type].led;
+		if (!l) {
+			throw unexpected_token_error(t);
+		}
+		left = (this->*l)(t, left);
 	}
 	
 	return left;
@@ -85,7 +95,7 @@ expression *parser::prefix_nud(token t) {
 expression *parser::paren_nud(token) {
 	expression *expr = getexpression(0);
 	if (current.type != r_paren) {
-		throw unexpected_token_error(current);
+		throw unexpected_token_error(current, r_paren);
 	}
 	current = lexer.gettoken();
 	
@@ -100,7 +110,7 @@ expression *parser::infix_led(token t, expression *left) {
 
 expression *parser::dot_led(token t, expression *left) {
 	if (current.type != name) {
-		throw unexpected_token_error(current);
+		throw unexpected_token_error(current, name);
 	}
 	
 	token n = current;
@@ -110,7 +120,6 @@ expression *parser::dot_led(token t, expression *left) {
 
 expression *parser::square_led(token, expression *left) {
 	std::vector<expression*> indices;
-	
 	while (current.type != r_square && current.type != eof) {
 		indices.push_back(getexpression());
 		
@@ -123,7 +132,7 @@ expression *parser::square_led(token, expression *left) {
 	}
 	
 	if (current.type != r_square) {
-		throw unexpected_token_error(current);
+		throw unexpected_token_error(current, comma, r_square);
 	}
 	current = lexer.gettoken();
 	
@@ -144,7 +153,7 @@ expression *parser::paren_led(token, expression *left) {
 	}
 	
 	if (current.type != r_paren) {
-		throw unexpected_token_error(current);
+		throw unexpected_token_error(current, comma, r_paren);
 	}
 	current = lexer.gettoken();
 	
@@ -152,7 +161,12 @@ expression *parser::paren_led(token, expression *left) {
 }
 
 statement *parser::getstatement() {
-	statement *stmt = (this->*symbols[current.type].std)();
+	std_parser s = symbols[current.type].std;
+	if (!s) {
+		throw unexpected_token_error(current);
+	}
+	statement *stmt = (this->*s)();
+	
 	while (current.type == semicolon) {
 		current = lexer.gettoken();
 	}
@@ -182,7 +196,13 @@ statement *parser::expr_std() {
 	}
 	
 	if (!isassignment(current.type)) {
-		throw unexpected_token_error(current);
+		throw unexpected_token_error(
+			current,
+			equals, plus_equals, minus_equals,
+			times_equals, div_equals,
+			and_equals, or_equals,
+			xor_equals
+		);
 	}
 	
 	token_type op = current.type;
@@ -200,7 +220,7 @@ statement *parser::var_std() {
 	std::vector<value*> names;
 	while (current.type != semicolon && current.type != eof) {
 		if (current.type != name) {
-			throw unexpected_token_error(current);
+			throw unexpected_token_error(current, name);
 		}
 		
 		token n = current;

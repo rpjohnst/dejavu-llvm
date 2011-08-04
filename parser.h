@@ -238,8 +238,14 @@ struct casestatement : public statement {
 #undef IMPLEMENT_ACCEPT
 
 struct unexpected_token_error : public std::exception {
-	explicit unexpected_token_error(token t) : std::exception(), tok(t) {}
-	token tok;
+	template<typename... Args>
+	unexpected_token_error(token unexpected, Args... exp) :
+		std::exception(), unexpected(unexpected), expected { exp... } {}
+	
+	~unexpected_token_error() throw () {} // wtf
+	
+	token unexpected;
+	std::vector<token_type> expected;
 };
 
 class parser {
