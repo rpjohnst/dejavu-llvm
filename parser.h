@@ -330,7 +330,11 @@ private:
 	statement *jump_std();
 	statement *return_std();
 	statement *case_std();
-		
+	
+	// utilities
+	token advance();
+	token advance(token_type t);
+	
 	token_stream& lexer;
 	token current;
 	

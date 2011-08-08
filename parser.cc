@@ -17,9 +17,7 @@ node *parser::getprogram() {
 		stmt = new block { stmts };
 	}
 	
-	if (current.type != eof) {
-		throw unexpected_token_error(current, eof);
-	}
+	advance(eof);
 	return stmt;
 }
 
@@ -44,18 +42,16 @@ private:
 } symbols;
 
 expression *parser::getexpression(int prec) {
-	token t = current;
-	current = lexer.gettoken();
+	token t = advance();
 	
 	nud_parser n = symbols[t.type].nud;
 	if (!n) {
-		throw unexpected_token_error(t);
+		throw unexpected_token_error(t/*, any tokens with .nud */);
 	}
 	expression *left = (this->*n)(t);
 	
 	while (prec < symbols[current.type].precedence) {
-		t = current;
-		current = lexer.gettoken();
+		t = advance();
 		
 		led_parser l = symbols[t.type].led;
 		if (!l) {
@@ -72,18 +68,9 @@ expression *parser::id_nud(token t) {
 }
 
 expression *parser::name_nud(token t) {
-	token o;
 	switch (current.type) {
-	case l_paren:
-		o = current;
-		current = lexer.gettoken();
-		return paren_led(o, new value { t });
-	
-	case l_square:
-		o = current;
-		current = lexer.gettoken();
-		return square_led(o, new value { t });
-	
+	case l_paren: return paren_led(advance(), new value { t });
+	case l_square: return square_led(advance(), new value { t });
 	default: return new value { t };
 	}
 }
@@ -94,11 +81,7 @@ expression *parser::prefix_nud(token t) {
 
 expression *parser::paren_nud(token) {
 	expression *expr = getexpression(0);
-	if (current.type != r_paren) {
-		throw unexpected_token_error(current, r_paren);
-	}
-	current = lexer.gettoken();
-	
+	advance(r_paren);	
 	return expr;
 }
 
@@ -109,12 +92,7 @@ expression *parser::infix_led(token t, expression *left) {
 }
 
 expression *parser::dot_led(token t, expression *left) {
-	if (current.type != name) {
-		throw unexpected_token_error(current, name);
-	}
-	
-	token n = current;
-	current = lexer.gettoken();
+	token n = advance(name);
 	return new binary { t.type, left, (this->*symbols[n.type].nud)(n) };
 }
 
@@ -124,17 +102,14 @@ expression *parser::square_led(token, expression *left) {
 		indices.push_back(getexpression());
 		
 		if (current.type == comma) {
-			current = lexer.gettoken();
+			advance();
 		}
 		else {
 			break;
 		}
 	}
 	
-	if (current.type != r_square) {
-		throw unexpected_token_error(current, comma, r_square);
-	}
-	current = lexer.gettoken();
+	advance(r_square); // or expected comma
 	
 	return new subscript { left, indices };
 }
@@ -152,10 +127,7 @@ expression *parser::paren_led(token, expression *left) {
 		}
 	}
 	
-	if (current.type != r_paren) {
-		throw unexpected_token_error(current, comma, r_paren);
-	}
-	current = lexer.gettoken();
+	advance(r_paren); // or expected comma
 	
 	return new call { left, args };
 }
@@ -205,8 +177,7 @@ statement *parser::expr_std() {
 		);
 	}
 	
-	token_type op = current.type;
-	current = lexer.gettoken();
+	token_type op = advance().type;
 	
 	expression *rvalue = getexpression();
 	
@@ -219,12 +190,7 @@ statement *parser::var_std() {
 	
 	std::vector<value*> names;
 	while (current.type != semicolon && current.type != eof) {
-		if (current.type != name) {
-			throw unexpected_token_error(current, name);
-		}
-		
-		token n = current;
-		current = lexer.gettoken();
+		token n = advance(name);
 		names.push_back((value*)(this->*symbols[n.type].nud)(n));
 		
 		if (current.type == comma) {
@@ -232,10 +198,7 @@ statement *parser::var_std() {
 		}
 	}
 	
-	if (current.type != semicolon) {
-		throw unexpected_token_error(current);
-	}
-	current = lexer.gettoken();
+	advance(semicolon);
 	
 	return new declaration { t, names };
 }
@@ -248,11 +211,8 @@ statement *parser::brace_std() {
 		stmts.push_back(getstatement());
 	}
 	
-	if (current.type == eof) {
-		throw unexpected_token_error(current, r_brace);
-	}
-	current = lexer.gettoken();
-	
+	advance(r_brace);
+
 	return new block { stmts };
 }
 
@@ -261,13 +221,13 @@ statement *parser::if_std() {
 	expression *cond = getexpression();
 	
 	if (current.type == kw_then) {
-		current = lexer.gettoken();
+		advance();
 	}
 	statement *branch_true = getstatement();
 	
 	statement *branch_false = 0;
 	if (current.type == kw_else) {
-		current = lexer.gettoken();
+		advance();
 		branch_false = getstatement();
 	}
 	
@@ -279,7 +239,7 @@ statement *parser::while_std() {
 	expression *cond = getexpression();
 	
 	if (current.type == kw_do) {
-		current = lexer.gettoken();
+		advance();
 	}
 	statement *stmt = getstatement();
 	
@@ -290,10 +250,7 @@ statement *parser::do_std() {
 	current = lexer.gettoken();
 	statement *stmt = getstatement();
 	
-	if (current.type != kw_until) {
-		throw unexpected_token_error(current, kw_until);
-	}
-	current = lexer.gettoken();
+	advance(kw_until);
 	
 	expression *cond = getexpression();
 	
@@ -310,24 +267,18 @@ statement *parser::repeat_std() {
 statement *parser::for_std() {
 	current = lexer.gettoken();
 	
-	if (current.type != l_paren) {
-		throw unexpected_token_error(current, l_paren);
-	}
-	current = lexer.gettoken();
+	advance(l_paren);
 	
 	statement *init = getstatement();
 	
 	expression *cond = getexpression();
 	if (current.type == semicolon) {
-		current = lexer.gettoken();
+		advance();
 	}
 	
 	statement *inc = getstatement();
 	
-	if (current.type != r_paren) {
-		throw unexpected_token_error(current, r_paren);
-	}
-	current = lexer.gettoken();
+	advance(r_paren);
 	
 	statement *stmt = getstatement();
 	
@@ -351,7 +302,7 @@ statement *parser::with_std() {
 	expression *expr = getexpression();
 	
 	if (current.type == kw_do) {
-		current = lexer.gettoken();
+		advance();
 	}
 	statement *stmt = getstatement();
 	
@@ -359,14 +310,11 @@ statement *parser::with_std() {
 }
 
 statement *parser::jump_std() {
-	token t = current;
-	current = lexer.gettoken();
-	
-	return new jump { t.type };
+	return new jump { advance().type };
 }
 
 statement *parser::return_std() {
-	current = lexer.gettoken();
+	advance();
 	
 	expression *expr = getexpression();
 	
@@ -374,20 +322,29 @@ statement *parser::return_std() {
 }
 
 statement *parser::case_std() {
-	token t = current;
-	current = lexer.gettoken();
+	token t = advance();
 	
 	expression *expr = 0;
 	if (t.type == kw_case) {
 		expr = getexpression();
 	}
 	
-	if (current.type != colon) {
-		throw unexpected_token_error(current, colon);
-	}
-	current = lexer.gettoken();
+	advance(colon);
 	
 	return new casestatement { expr };
+}
+
+token parser::advance() {
+	token r = current;
+	current = lexer.gettoken();
+	return r;
+}
+
+token parser::advance(token_type t) {
+	if (current.type != t) {
+		throw unexpected_token_error(current, t);
+	}
+	return advance();
 }
 
 void symbol_table::prefix(token_type t, nud_parser nud) {
