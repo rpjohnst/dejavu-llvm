@@ -1,5 +1,6 @@
 #include "parser.h"
-#include <map>
+
+symbol_table symbols;
 
 parser::parser(token_stream& l) : lexer(l), current(lexer.gettoken()) {}
 
@@ -20,26 +21,6 @@ node *parser::getprogram() {
 	advance(eof);
 	return stmt;
 }
-
-typedef statement *(parser::*std_parser)();
-typedef expression *(parser::*nud_parser)(token);
-typedef expression *(parser::*led_parser)(token, expression*);
-
-struct symbol {
-	int precedence;
-	std_parser std;
-	nud_parser nud;
-	led_parser led;
-};
-
-class symbol_table : public std::map<token_type, symbol> {
-public:
-	symbol_table();
-
-private:
-	void prefix(token_type t, nud_parser nud = &parser::prefix_nud);
-	void infix(token_type t, int prec, led_parser led = &parser::infix_led);
-} symbols;
 
 expression *parser::getexpression(int prec) {
 	token t = advance();

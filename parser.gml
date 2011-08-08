@@ -1,9 +1,9 @@
 /* this is a comment summarizing the script */
 
-var foo, bar, baz qux;;
-foo = 3
-bar = foo + 3;;;
-(instance_create(x, y, object_index)).asdf = 3;
+var foo, bar_Baz7 qux,;;
+foo = 3 + 2 - +1 * 0 / -(1 div 2) mod (3 + 2)
+bar_Baz7 := foo + self.foo;;;
+(instance_create(x, y, object_index)).asdf = 3
 (100001).asdf[3] = "asdf"
 
 qux[] = foo
@@ -30,7 +30,7 @@ begin
 	end
 end
 else
-	if (false) {/*exit;*/}
+	if (false) exit;
 
 for (asdf = 4;; asdf < 5; asdf += 1) {
 	switch (asdf + 2) {
