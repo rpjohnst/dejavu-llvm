@@ -1,5 +1,6 @@
 #include "printer.h"
 #include <cstdio>
+#include "parser.h"
 
 void print_token(const token& t) {
 	switch (t.type) {

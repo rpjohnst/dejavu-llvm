@@ -2,7 +2,7 @@
 #define PRINTER_H
 
 #include "lexer.h"
-#include "parser.h"
+#include "node.h"
 
 void print_token(const token& t);
 
