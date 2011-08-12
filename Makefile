@@ -2,7 +2,7 @@
 
 CXX := g++
 CPPFLAGS := -Wall -Wextra
-CXXFLAGS := -std=c++0x
+CXXFLAGS :=
 LDFLAGS :=
 
 # gather source files

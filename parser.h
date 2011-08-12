@@ -13,13 +13,12 @@ struct unexpected_token_error {
 	unexpected_token_error(token unexpected, const char *expected) :
 		unexpected(unexpected), expected(expected) {}
 	
-	template<typename... Args>
-	unexpected_token_error(token unexpected, Args... exp) :
-		unexpected(unexpected), expected_tokens { exp... } {}
+	unexpected_token_error(token unexpected, token_type exp) :
+		unexpected(unexpected), expected_token(exp) {}
 	
 	token unexpected;
 	const char *expected;
-	std::vector<token_type> expected_tokens;
+	token_type expected_token;
 };
 
 struct error_stream {

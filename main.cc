@@ -19,17 +19,9 @@ public:
 		if (e.expected) {
 			printf("; expected %s", e.expected);
 		}
-		
-		if (e.expected_tokens.size() > 0) {
+		else {
 			printf("; expected ");
-			for (
-				auto it = e.expected_tokens.begin();
-				it != e.expected_tokens.end(); ++it
-			) {
-				if (it != e.expected_tokens.begin())
-					printf(" or ");
-				print_token(token(*it, 0, 0));
-			}
+			print_token(token(e.expected_token, 0, 0));
 		}
 		
 		printf("\n");

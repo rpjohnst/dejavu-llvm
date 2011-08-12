@@ -4,6 +4,7 @@
 #include <vector>
 #include <algorithm>
 #include "lexer.h"
+#include "stl_helpers.h"
 
 enum node_type {
 #define NODE(X) X ## _node,
@@ -56,9 +57,7 @@ struct subscript : public expression {
 		expression(subscript_node), array(array), indices(indices) {}
 	~subscript() {
 		delete array;
-		std::for_each(indices.begin(), indices.end(), [](expression *e) {
-			delete e;
-		});
+		std::for_each(indices.begin(), indices.end(), deleter<expression>);
 	}
 	
 	expression *array;
@@ -70,9 +69,7 @@ struct call : public expression {
 		expression(call_node), function(function), args(args) {}
 	~call() {
 		delete function;
-		std::for_each(args.begin(), args.end(), [](expression *e) {
-			delete e;
-		});
+		std::for_each(args.begin(), args.end(), deleter<expression>);
 	}
 	
 	expression *function;
@@ -107,9 +104,7 @@ struct declaration : public statement {
 	declaration(token type, std::vector<value*>& names) :
 		statement(declaration_node), type(type), names(names) {}
 	~declaration() {
-		std::for_each(names.begin(), names.end(), [](value *n) {
-			delete n;
-		});
+		std::for_each(names.begin(), names.end(), deleter<value>);
 	}
 	
 	token type;
@@ -120,9 +115,7 @@ struct block : public statement {
 	block(std::vector<statement*>& stmts) :
 		statement(block_node), stmts(stmts) {}
 	~block() {
-		std::for_each(stmts.begin(), stmts.end(), [](statement *s) {
-			delete s;
-		});
+		std::for_each(stmts.begin(), stmts.end(), deleter<statement>);
 	}
 	
 	std::vector<statement*> stmts;

@@ -77,10 +77,7 @@ void node_printer::visit_subscript(subscript *s) {
 	int p = precedence;
 	precedence = 0;
 	
-	for (auto it = s->indices.begin(); it != s->indices.end(); ++it) {
-		if (it != s->indices.begin()) printf(", ");
-		visit(*it);
-	}
+	print_list(s->indices.begin(), s->indices.end());
 	
 	precedence = p;
 	
@@ -92,10 +89,7 @@ void node_printer::visit_call(call *c) {
 	
 	visit(c->function);
 	printf("(");
-	for (auto it = c->args.begin(); it != c->args.end(); ++it) {
-		if (it != c->args.begin()) printf(", ");
-		visit(*it);
-	}
+	print_list(c->args.begin(), c->args.end());
 	printf(")");
 	
 	if (precedence >= 80) printf(")");
@@ -117,20 +111,20 @@ void node_printer::visit_invocation(invocation* i) {
 
 void node_printer::visit_declaration(declaration *d) {
 	printf("var ");
-	for (auto it = d->names.begin(); it != d->names.end(); ++it) {
-		if (it != d->names.begin()) printf(", ");
-		visit(*it);
-	}
+	print_list(d->names.begin(), d->names.end());
 	printf(";");
 }
 
 void node_printer::visit_block(block *b) {
 	printf("{\n"); scope++;
-	std::for_each(b->stmts.begin(), b->stmts.end(), [&](statement* s) {
-		if (s->type == casestatement_node) scope--;
-		indent(); visit(s); printf("\n");
-		if (s->type == casestatement_node) scope++;
-	});
+	for (
+		std::vector<statement*>::iterator it = b->stmts.begin();
+		it != b->stmts.end(); ++it
+	) {
+		if ((*it)->type == casestatement_node) scope--;
+		indent(); visit(*it); printf("\n");
+		if ((*it)->type == casestatement_node) scope++;
+	};
 	scope--; indent(); printf("}");
 }
 
@@ -218,5 +212,13 @@ void node_printer::print_branch(statement *s) {
 		scope++;
 		indent(); visit(s);
 		scope--;
+	}
+}
+
+template <typename I>
+void node_printer::print_list(I begin, I end) {
+	for (I it = begin; it != end; ++it) {
+		if (it != begin) printf(", ");
+		visit(*it);
 	}
 }

@@ -41,6 +41,9 @@ private:
 	void indent();
 	void print_branch(statement *s);
 	
+	template <typename I>
+	void print_list(I begin, I end);
+	
 	size_t scope;
 	int precedence;
 };
