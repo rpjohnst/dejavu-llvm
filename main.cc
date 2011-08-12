@@ -26,10 +26,28 @@ public:
 		
 		printf("\n");
 	}
+	
+	void push_back(const type_error &e) {
+		printf("%s: type error\n", name);
+	}
 
 private:
 	const char *name;
 };
+
+void test_compiler() {
+	file_buffer file;
+	file.open_file("compiler.gml", O_RDONLY);
+	error_printer errors("compiler.gml");
+	
+	token_stream tokens(file);
+	parser parser(tokens, errors);
+	
+	node_codegen compiler;
+	node *program = parser.getprogram();
+	compiler.visit(program);
+	delete program;
+}
 
 void test_parser() {
 	file_buffer file;
@@ -48,6 +66,7 @@ void test_parser() {
 void test_lexer() {
 	file_buffer file;
 	file.open_file("lexer.gml", O_RDONLY);
+	
 	token_stream tokens(file);
 	token t;
 	
@@ -61,5 +80,6 @@ void test_lexer() {
 
 int main() {
 	// test_lexer();
-	test_parser();
+	// test_parser();
+	test_compiler();
 }

@@ -4,6 +4,16 @@ CXX := clang++
 CPPFLAGS := -Wall -Wextra -g
 CXXFLAGS :=
 LDFLAGS :=
+LDLIBS :=
+
+# llvm configuration
+
+LLVM_DIR := ../llvm-build/Debug/bin
+LLVM_CONFIG := $(LLVM_DIR)/llvm-config
+
+CXXFLAGS += $(shell $(LLVM_CONFIG) --cxxflags)
+LDFLAGS += $(shell $(LLVM_CONFIG) --ldflags)
+LDLIBS += $(shell $(LLVM_CONFIG) --libs core)
 
 # gather source files
 
