@@ -10,6 +10,8 @@ class node_printer : public node::visitor {
 public:
 	node_printer() : scope(0), precedence(0) {}
 	
+	void visit(expression_error *e);
+	
 	void visit(value *v);
 	void visit(unary *u);
 	void visit(binary *b);
@@ -32,6 +34,8 @@ public:
 	void visit(jump *j);
 	void visit(returnstatement *r);
 	void visit(casestatement *c);
+	
+	void visit(statement_error *e);
 	
 private:
 	void indent();

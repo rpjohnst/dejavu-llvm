@@ -12,11 +12,15 @@ public:
 	// maybe bump pointer in a large buffer?
 	
 	struct visitor {
+		virtual void visit(class expression_error*) = 0;
+		
 		virtual void visit(class value*) = 0;
 		virtual void visit(class unary*) = 0;
 		virtual void visit(class binary*) = 0;
 		virtual void visit(class subscript*) = 0;
 		virtual void visit(class call*) = 0;
+		
+		virtual void visit(class statement_error*) = 0;
 		
 		virtual void visit(class assignment*) = 0;
 		virtual void visit(class invocation*) = 0;
@@ -46,6 +50,10 @@ private:
 }
 
 class expression : public node {};
+
+struct expression_error : public expression {
+	IMPLEMENT_ACCEPT();
+};
 
 struct value : public expression {
 	value(token t) : t(t) {}
@@ -108,6 +116,10 @@ struct call : public expression {
 };
 
 class statement : public node {};
+
+struct statement_error : public statement {
+	IMPLEMENT_ACCEPT();
+};
 
 struct assignment : public statement {
 	assignment(token_type op, expression *lvalue, expression *rvalue) :

@@ -4,6 +4,10 @@
 
 void print_token(const token& t) {
 	switch (t.type) {
+	case unexpected:
+		printf("%.*s", (int)t.string.length, t.string.data);
+		break;
+	
 	case name:
 		printf("%.*s", (int)t.string.length, t.string.data);
 		break;
@@ -24,6 +28,10 @@ void print_token(const token& t) {
 	
 	default: ; // do nothing
 	}
+}
+
+void node_printer::visit(expression_error*) {
+	printf("<expression error>");
 }
 
 void node_printer::visit(value *v) {
@@ -96,6 +104,10 @@ void node_printer::visit(call *c) {
 	printf(")");
 	
 	if (precedence >= 80) printf(")");
+}
+
+void node_printer::visit(statement_error*) {
+	printf("<statement error>");
 }
 
 void node_printer::visit(assignment *a) {

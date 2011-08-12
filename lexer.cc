@@ -124,9 +124,9 @@ token token_stream::gettoken() {
 	}
 	
 	// error
-	current++;
-	col++;
-	return token(unexpected, row, col);
+	token u = token(unexpected, row, ++col);
+	u.string.data = current++; u.string.length = 1;
+	return u;
 }
 
 // skips any whitespace at the current position

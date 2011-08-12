@@ -1,40 +1,61 @@
 #include <cstdio>
+#include <deque>
 #include "file.h"
 #include "lexer.h"
 #include "parser.h"
 #include "printer.h"
 
-void test_parser() {
-	file_buffer file(file_descriptor("parser.gml", O_RDONLY));
-	token_stream tokens(file);
-	parser parser(tokens);
-	node_printer printer;
+class error_printer : public error_stream {
+public:
+	error_printer(const char *name) : name(name) {}
 	
-	try {
-		node *program = parser.getprogram();
-		program->accept(&printer); printf("\n");
-		delete program;
-	}
-	catch (unexpected_token_error& e) {
+	void push_back(const unexpected_token_error &e) {
 		printf(
-			":%lu:%lu: error: unexpected ",
-			e.unexpected.row, e.unexpected.col
+			"%s:%lu:%lu: error: unexpected ",
+			name, e.unexpected.row, e.unexpected.col
 		);
 		print_token(e.unexpected);
 		
-		if (e.expected.size() > 0) {
+		if (e.expected) {
+			printf("; expected %s", e.expected);
+		}
+		
+		if (e.expected_tokens.size() > 0) {
 			printf("; expected ");
-			for (auto it = e.expected.begin(); it != e.expected.end(); ++it) {
-				if (it != e.expected.begin()) printf(" or ");
+			for (
+				auto it = e.expected_tokens.begin();
+				it != e.expected_tokens.end(); ++it
+			) {
+				if (it != e.expected_tokens.begin())
+					printf(" or ");
 				print_token(token(*it, 0, 0));
 			}
 		}
+		
 		printf("\n");
 	}
+
+private:
+	const char *name;
+};
+
+void test_parser() {
+	file_buffer file;
+	file.open_file("parser.gml", O_RDONLY);
+	
+	token_stream tokens(file);
+	error_printer errors("parser.gml");
+	parser parser(tokens, errors);
+	
+	node_printer printer;
+	node *program = parser.getprogram();
+	printer.visit(program); printf("\n");
+	delete program;
 }
 
 void test_lexer() {
-	file_buffer file(file_descriptor("lexer.gml", O_RDONLY));
+	file_buffer file;
+	file.open_file("lexer.gml", O_RDONLY);
 	token_stream tokens(file);
 	token t;
 	

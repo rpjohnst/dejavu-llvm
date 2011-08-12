@@ -9,22 +9,28 @@
 #include "lexer.h"
 #include "node.h"
 
-struct unexpected_token_error : public std::exception {
+struct unexpected_token_error {
+	unexpected_token_error(token unexpected, const char *expected) :
+		unexpected(unexpected), expected(expected) {}
+	
 	template<typename... Args>
 	unexpected_token_error(token unexpected, Args... exp) :
-		std::exception(), unexpected(unexpected), expected { exp... } {}
-	
-	~unexpected_token_error() throw () {} // wtf
+		unexpected(unexpected), expected_tokens { exp... } {}
 	
 	token unexpected;
-	std::vector<token_type> expected;
+	const char *expected;
+	std::vector<token_type> expected_tokens;
+};
+
+struct error_stream {
+	virtual void push_back(const unexpected_token_error&) = 0;
 };
 
 class parser {
 	friend class symbol_table;
 	
 public:
-	parser(token_stream& l);
+	parser(token_stream& l, error_stream& e);
 	node *getprogram();
 
 private:
@@ -64,8 +70,13 @@ private:
 	token advance();
 	token advance(token_type t);
 	
+	statement_error *error_stmt(const unexpected_token_error&);
+	expression_error *error_expr(const unexpected_token_error&);
+	
 	token_stream& lexer;
 	token current;
+	
+	error_stream& errors;
 	
 	DISALLOW_COPY(parser);
 };
