@@ -2,40 +2,40 @@
 #define PRINTER_H
 
 #include "lexer.h"
-#include "node.h"
+#include "node_visitor.h"
 
 void print_token(const token& t);
 
-class node_printer : public node::visitor {
+class node_printer : public node_visitor<node_printer> {
 public:
 	node_printer() : scope(0), precedence(0) {}
 	
-	void visit(expression_error *e);
+	void visit_expression_error(expression_error *e);
 	
-	void visit(value *v);
-	void visit(unary *u);
-	void visit(binary *b);
-	void visit(subscript *s);
-	void visit(call *c);
+	void visit_value(value *v);
+	void visit_unary(unary *u);
+	void visit_binary(binary *b);
+	void visit_subscript(subscript *s);
+	void visit_call(call *c);
 	
-	void visit(assignment *a);
-	void visit(invocation* i);
-	void visit(declaration *d);
-	void visit(block *b);
+	void visit_assignment(assignment *a);
+	void visit_invocation(invocation* i);
+	void visit_declaration(declaration *d);
+	void visit_block(block *b);
 	
-	void visit(ifstatement *i);
-	void visit(whilestatement *w);
-	void visit(dostatement *d);
-	void visit(repeatstatement *r);
-	void visit(forstatement *f);
-	void visit(switchstatement *s);
-	void visit(withstatement *w);
+	void visit_ifstatement(ifstatement *i);
+	void visit_whilestatement(whilestatement *w);
+	void visit_dostatement(dostatement *d);
+	void visit_repeatstatement(repeatstatement *r);
+	void visit_forstatement(forstatement *f);
+	void visit_switchstatement(switchstatement *s);
+	void visit_withstatement(withstatement *w);
 	
-	void visit(jump *j);
-	void visit(returnstatement *r);
-	void visit(casestatement *c);
+	void visit_jump(jump *j);
+	void visit_returnstatement(returnstatement *r);
+	void visit_casestatement(casestatement *c);
 	
-	void visit(statement_error *e);
+	void visit_statement_error(statement_error *e);
 	
 private:
 	void indent();

@@ -30,44 +30,39 @@ void print_token(const token& t) {
 	}
 }
 
-void node_printer::visit(expression_error*) {
+void node_printer::visit_expression_error(expression_error*) {
 	printf("<expression error>");
 }
 
-void node_printer::visit(value *v) {
+void node_printer::visit_value(value *v) {
 	if (precedence >= 80 && v->t.type == real) printf("(");
 	print_token(v->t);
 	if (precedence >= 80 && v->t.type == real) printf(")");
 }
 
-void node_printer::visit(unary *u) {
+void node_printer::visit_unary(unary *u) {
 	print_token(token(u->op, 0, 0));
 	
 	int p = precedence;
 	precedence = 70;
 	
-	u->right->accept(this);
+	visit(u->right);
 	
 	precedence = p;
 }
 
-void node_printer::visit(binary *b) {
+void node_printer::visit_binary(binary *b) {
 	if (symbols[b->op].precedence < precedence) {
 		printf("(");
 	}
 	int p = precedence;
 	precedence = symbols[b->op].precedence;
 	
-	if (b->op == dot) {
-		b->left->accept(this);
-		print_token(token(b->op, 0, 0));
-		b->right->accept(this);
-	}
-	else {
-		b->left->accept(this);
-		printf(" "); print_token(token(b->op, 0, 0)); printf(" ");
-		b->right->accept(this);
-	}
+	visit(b->left);
+	if (b->op != dot) printf(" ");
+	print_token(token(b->op, 0, 0));
+	if (b->op != dot) printf(" ");
+	visit(b->right);
 	
 	precedence = p;
 	if (symbols[b->op].precedence < precedence) {
@@ -75,8 +70,8 @@ void node_printer::visit(binary *b) {
 	}
 }
 
-void node_printer::visit(subscript *s) {
-	s->array->accept(this);
+void node_printer::visit_subscript(subscript *s) {
+	visit(s->array);
 	printf("[");
 	
 	int p = precedence;
@@ -84,7 +79,7 @@ void node_printer::visit(subscript *s) {
 	
 	for (auto it = s->indices.begin(); it != s->indices.end(); ++it) {
 		if (it != s->indices.begin()) printf(", ");
-		(*it)->accept(this);
+		visit(*it);
 	}
 	
 	precedence = p;
@@ -92,120 +87,119 @@ void node_printer::visit(subscript *s) {
 	printf("]");
 }
 
-void node_printer::visit(call *c) {
+void node_printer::visit_call(call *c) {
 	if (precedence >= 80) printf("(");
 	
-	c->function->accept(this);
+	visit(c->function);
 	printf("(");
 	for (auto it = c->args.begin(); it != c->args.end(); ++it) {
 		if (it != c->args.begin()) printf(", ");
-		(*it)->accept(this);
+		visit(*it);
 	}
 	printf(")");
 	
 	if (precedence >= 80) printf(")");
 }
 
-void node_printer::visit(statement_error*) {
+void node_printer::visit_statement_error(statement_error*) {
 	printf("<statement error>");
 }
 
-void node_printer::visit(assignment *a) {
-	a->lvalue->accept(this); printf(" ");
+void node_printer::visit_assignment(assignment *a) {
+	visit(a->lvalue); printf(" ");
 	print_token(token(a->op, 0, 0)); printf(" ");
-	a->rvalue->accept(this); printf(";");
+	visit(a->rvalue); printf(";");
 }
 
-void node_printer::visit(invocation* i) {
-	i->c->accept(this); printf(";");
+void node_printer::visit_invocation(invocation* i) {
+	visit(i->c); printf(";");
 }
 
-void node_printer::visit(declaration *d) {
+void node_printer::visit_declaration(declaration *d) {
 	printf("var ");
 	for (auto it = d->names.begin(); it != d->names.end(); ++it) {
 		if (it != d->names.begin()) printf(", ");
-		(*it)->accept(this);
+		visit(*it);
 	}
 	printf(";");
 }
 
-void node_printer::visit(block *b) {
+void node_printer::visit_block(block *b) {
 	printf("{\n"); scope++;
 	std::for_each(b->stmts.begin(), b->stmts.end(), [&](statement* s) {
-		casestatement *c = dynamic_cast<casestatement*>(s);
-		if (c) scope--;
-		indent(); s->accept(this); printf("\n");
-		if (c) scope++;
+		if (s->type == casestatement_node) scope--;
+		indent(); visit(s); printf("\n");
+		if (s->type == casestatement_node) scope++;
 	});
 	scope--; indent(); printf("}");
 }
 
-void node_printer::visit(ifstatement *i) {
-	printf("if ("); i->cond->accept(this); printf(")");
+void node_printer::visit_ifstatement(ifstatement *i) {
+	printf("if ("); visit(i->cond); printf(")");
 	print_branch(i->branch_true);
 	if (i->branch_false) {
 		printf("\n");
 		indent(); printf("else");
 		
-		if (!dynamic_cast<ifstatement*>(i->branch_false)) {
+		if (i->branch_false->type != ifstatement_node) {
 			printf("\n"); print_branch(i->branch_false);
 		}
 		else {
-			printf(" "); i->branch_false->accept(this);
+			printf(" "); visit(i->branch_false);
 		}
 	}
 }
 
-void node_printer::visit(whilestatement *w) {
-	printf("while ("); w->cond->accept(this); printf(")");
+void node_printer::visit_whilestatement(whilestatement *w) {
+	printf("while ("); visit(w->cond); printf(")");
 	print_branch(w->stmt);
 }
 
-void node_printer::visit(dostatement *d) {
+void node_printer::visit_dostatement(dostatement *d) {
 	printf("do");
 	print_branch(d->stmt);
-	printf(" until ("); d->cond->accept(this); printf(");");
+	printf(" until ("); visit(d->cond); printf(");");
 }
 
-void node_printer::visit(repeatstatement *r) {
-	printf("repeat ("); r->expr->accept(this); printf(")");
+void node_printer::visit_repeatstatement(repeatstatement *r) {
+	printf("repeat ("); visit(r->expr); printf(")");
 	print_branch(r->stmt);
 }
 
-void node_printer::visit(forstatement *f) {
+void node_printer::visit_forstatement(forstatement *f) {
 	printf("for (");
-		f->init->accept(this); printf(" ");
-		f->cond->accept(this); printf("; ");
-		f->inc->accept(this); printf("\b");
+		visit(f->init); printf(" ");
+		visit(f->cond); printf("; ");
+		visit(f->inc); printf("\b");
 	printf(")");
 	print_branch(f->stmt);
 }
 
-void node_printer::visit(switchstatement *s) {
-	printf("switch ("); s->expr->accept(this); printf(")");
+void node_printer::visit_switchstatement(switchstatement *s) {
+	printf("switch ("); visit(s->expr); printf(")");
 	print_branch(s->stmts);
 }
 
-void node_printer::visit(withstatement *w) {
-	printf("with ("); w->expr->accept(this); printf(")");
+void node_printer::visit_withstatement(withstatement *w) {
+	printf("with ("); visit(w->expr); printf(")");
 	print_branch(w->stmt);
 }
 
-void node_printer::visit(jump *j) {
+void node_printer::visit_jump(jump *j) {
 	print_token(token(j->type, 0, 0)); printf(";");
 }
 
-void node_printer::visit(returnstatement *r) {
-	printf("return "); r->expr->accept(this); printf(";");
+void node_printer::visit_returnstatement(returnstatement *r) {
+	printf("return "); visit(r->expr); printf(";");
 }
 
-void node_printer::visit(casestatement *c) {
+void node_printer::visit_casestatement(casestatement *c) {
 	if (c->expr) {
-		printf("case ");
-		c->expr->accept(this);
+		printf("case "); visit(c->expr);
 	}
-	else
+	else {
 		printf("default");
+	}
 	
 	printf(":");
 }
@@ -216,14 +210,13 @@ void node_printer::indent() {
 }
 
 void node_printer::print_branch(statement *s) {
-	block *b = dynamic_cast<block*>(s);
-	if (b) {
-		printf(" "); b->accept(this);
+	if (s->type == block_node) {
+		printf(" "); visit(static_cast<block*>(s));
 	}
 	else {
 		printf("\n");
 		scope++;
-		indent(); s->accept(this);
+		indent(); visit(s);
 		scope--;
 	}
 }

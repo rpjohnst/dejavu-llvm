@@ -1,0 +1,32 @@
+#ifndef NODE
+#define NODE(X)
+#endif
+
+NODE(expression_error)
+
+NODE(value)
+NODE(unary)
+NODE(binary)
+NODE(subscript)
+NODE(call)
+
+NODE(statement_error)
+
+NODE(assignment)
+NODE(invocation)
+NODE(declaration)
+NODE(block)
+
+NODE(ifstatement)
+NODE(whilestatement)
+NODE(dostatement)
+NODE(repeatstatement)
+NODE(forstatement)
+NODE(switchstatement)
+NODE(withstatement)
+
+NODE(jump)
+NODE(returnstatement)
+NODE(casestatement)
+
+#undef NODE

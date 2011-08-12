@@ -162,9 +162,8 @@ bool isassignment(token_type t) {
 statement *parser::expr_std() {
 	expression *lvalue = getexpression(symbols[equals].precedence);
 	
-	call *b = dynamic_cast<call*>(lvalue);
-	if (b && !isassignment(current.type)) {
-		return new invocation { dynamic_cast<call*>(lvalue) };
+	if (lvalue->type == call_node && !isassignment(current.type)) {
+		return new invocation { static_cast<call*>(lvalue) };
 	}
 	
 	if (!isassignment(current.type)) {
