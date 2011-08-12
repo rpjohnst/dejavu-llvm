@@ -71,9 +71,8 @@ token token_stream::gettoken() {
 		
 		// single-line comment
 		if (*(current + 1) == '/') {
-			current += 2;
-			col += 2;
-			while (!isnewline(*current++))
+			current++;
+			while (!isnewline(*++current))
 				continue;
 		}
 		// multi-line comment

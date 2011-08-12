@@ -1,3 +1,4 @@
+// does this mess up line numbers?
 /* this is a comment summarizing the script */
 
 var foo, bar_Baz7 qux,;;
