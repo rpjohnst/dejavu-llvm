@@ -1,13 +1,17 @@
 #ifndef CODEGEN_H
 #define CODEGEN_H
 
+#include <map>
+#include <string>
 #include "llvm/LLVMContext.h"
 #include "llvm/Support/IRBuilder.h"
+#include "llvm/Module.h"
 #include "node_visitor.h"
 
 class node_codegen : public node_visitor<node_codegen, llvm::Value*> {
 public:
-	node_codegen() : builder(context) {}
+	node_codegen();
+	llvm::Module &get_module(node*);
 	
 	llvm::Value *visit_expression_error(expression_error *e);
 	
@@ -37,8 +41,12 @@ public:
 	llvm::Value *visit_casestatement(casestatement *c);
 
 private:
+	llvm::Function *get_function(const char *name, int args);
+	
 	llvm::LLVMContext context;
 	llvm::IRBuilder<> builder;
+	llvm::Module module;
+	std::map<std::string, llvm::AllocaInst*> scope;
 };
 
 #endif

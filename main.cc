@@ -26,10 +26,6 @@ public:
 		
 		printf("\n");
 	}
-	
-	void push_back(const type_error &e) {
-		printf("%s: type error\n", name);
-	}
 
 private:
 	const char *name;
@@ -45,7 +41,7 @@ void test_compiler() {
 	
 	node_codegen compiler;
 	node *program = parser.getprogram();
-	compiler.visit(program);
+	compiler.get_module(program).dump();
 	delete program;
 }
 
