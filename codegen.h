@@ -42,6 +42,7 @@ public:
 
 private:
 	llvm::Function *get_function(const char *name, int args);
+	llvm::AllocaInst *get_lvalue(expression*);
 	
 	llvm::LLVMContext context;
 	llvm::IRBuilder<> builder;

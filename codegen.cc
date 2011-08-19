@@ -87,6 +87,36 @@ Value *node_codegen::visit_value(value *v) {
 		std::string name(v->t.string.data, v->t.string.length);
 		return builder.CreateLoad(scope[name], name);
 	}
+	
+	case kw_self: {
+		Constant *real = ConstantFP::get(Type::getDoubleTy(context), -1);
+		return builder.CreateCall(get_function("create_real", 1), real);
+	}
+	case kw_other: {
+		Constant *real = ConstantFP::get(Type::getDoubleTy(context), -2);
+		return builder.CreateCall(get_function("create_real", 1), real);
+	}
+	case kw_all: {
+		Constant *real = ConstantFP::get(Type::getDoubleTy(context), -3);
+		return builder.CreateCall(get_function("create_real", 1), real);
+	}
+	case kw_noone: {
+		Constant *real = ConstantFP::get(Type::getDoubleTy(context), -4);
+		return builder.CreateCall(get_function("create_real", 1), real);
+	}
+	case kw_global: {
+		Constant *real = ConstantFP::get(Type::getDoubleTy(context), -5);
+		return builder.CreateCall(get_function("create_real", 1), real);
+	}
+	
+	case kw_true: {
+		Constant *real = ConstantFP::get(Type::getDoubleTy(context), 1);
+		return builder.CreateCall(get_function("create_real", 1), real);
+	}
+	case kw_false: {
+		Constant *real = ConstantFP::get(Type::getDoubleTy(context), 0);
+		return builder.CreateCall(get_function("create_real", 1), real);
+	}
 	}
 }
 
@@ -107,9 +137,37 @@ Value *node_codegen::visit_binary(binary *b) {
 	const char *name;
 	switch (b->op) {
 	default: return 0;
+	
+	case dot:
+		visit(b->left);
+		return visit_value(static_cast<value*>(b->right));
+		break;
+	
+	// todo: can we pull this out of a table instead of copypasting?
+	case less: name = "less"; break;
+	case less_equals: name = "less_equals"; break;
+	case is_equals: name = "is_equals"; break;
+	case not_equals: name = "not_equals"; break;
+	case greater_equals: name = "greater_equals"; break;
+	case greater: name = "greater"; break;
+	
 	case plus: name = "plus"; break;
+	case minus: name = "minus"; break;
 	case times: name = "times"; break;
 	case divide: name = "divide"; break;
+	
+	case ampamp: name = "ampamp"; break;
+	case pipepipe: name = "pipepipe"; break;
+	case caretcaret: name = "caretcaret"; break;
+	
+	case bit_and: name = "bit_and"; break;
+	case bit_or: name = "bit_or"; break;
+	case bit_xor: name = "bit_xor"; break;
+	case shift_left: name = "shift_left"; break;
+	case shift_right: name = "shift_right"; break;
+	
+	case kw_div: name = "div"; break;
+	case kw_mod: name = "mod"; break;
 	}
 	
 	return builder.CreateCall2(
@@ -122,21 +180,25 @@ Value *node_codegen::visit_subscript(subscript *s) {
 	return 0;
 }
 
+struct vector_codegen {
+	vector_codegen(node_codegen &v) : v(v) {}
+	Value *operator() (expression *e) {
+		return v.visit(e);
+	}
+	node_codegen &v;
+};
+
 Value *node_codegen::visit_call(call *c) {
 	value *f = static_cast<value*>(c->function);
 	
 	std::string name(f->t.string.data, f->t.string.length);
 	Function *function = get_function(name.c_str(), c->args.size());
 	
-	struct vector_codegen {
-		vector_codegen(node_codegen &v) : v(v) {}
-		Value *operator() (expression *e) {
-			return v.visit(e);
-		}
-		node_codegen &v;
-	} t(*this);
 	std::vector<Value*> args(c->args.size());
-	std::transform(c->args.begin(), c->args.end(), args.begin(), t);
+	std::transform(
+		c->args.begin(), c->args.end(),
+		args.begin(), vector_codegen(*this)
+	);
 	
 	return builder.CreateCall(function, args.begin(), args.end());
 }
@@ -146,14 +208,12 @@ Value *node_codegen::visit_statement_error(statement_error*) {
 }
 
 Value *node_codegen::visit_assignment(assignment *a) {
-	value *lvalue = static_cast<value*>(a->lvalue);
-	std::string name(lvalue->t.string.data, lvalue->t.string.length);
-	builder.CreateStore(visit(a->rvalue), scope[name]);
+	builder.CreateStore(visit(a->rvalue), get_lvalue(a->lvalue));
 	return 0;
 }
 
 Value *node_codegen::visit_invocation(invocation* i) {
-	
+	visit(i->c);
 }
 
 Value *node_codegen::visit_declaration(declaration *d) {
@@ -233,4 +293,29 @@ Function *node_codegen::get_function(const char *name, int args) {
 		);
 	}
 	return function;
+}
+
+AllocaInst *node_codegen::get_lvalue(expression *lvalue) {
+	switch (lvalue->type) {
+	default: return 0;
+	
+	case value_node: {
+		value *v = static_cast<value*>(lvalue);
+		std::string name(v->t.string.data, v->t.string.length);
+		return scope[name];
+	}
+	
+	case binary_node: {
+		binary *b = static_cast<binary*>(lvalue);
+		if (b->op != dot) return 0;
+		
+		Value *left = visit(b->left);
+		return get_lvalue(b->right);
+	}
+	
+	case subscript_node: {
+		subscript *s = static_cast<subscript*>(lvalue);
+		return get_lvalue(s->array);
+	}
+	}
 }
