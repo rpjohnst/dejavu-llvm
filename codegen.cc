@@ -242,7 +242,7 @@ Value *node_codegen::visit_block(block *b) {
 }
 
 Value *node_codegen::visit_ifstatement(ifstatement *i) {
-	Value *b = visit(i->cond); // get a real out of it
+	Value *b = visit(i->cond); // todo: get a real out of it
 	Value *cond = builder.CreateFCmpOGT(
 		b, ConstantFP::get(Type::getDoubleTy(context), 0.5)
 	);
@@ -267,22 +267,129 @@ Value *node_codegen::visit_ifstatement(ifstatement *i) {
 	
 	f->getBasicBlockList().push_back(merge);
 	builder.SetInsertPoint(merge);
+	
+	return 0;
 }
 
 Value *node_codegen::visit_whilestatement(whilestatement *w) {
+	Function *f = builder.GetInsertBlock()->getParent();
+	BasicBlock *loop = BasicBlock::Create(context, "loop");
+	BasicBlock *cond = BasicBlock::Create(context, "cond");
+	BasicBlock *after = BasicBlock::Create(context, "after");
 	
+	builder.CreateBr(cond);
+	
+	f->getBasicBlockList().push_back(cond);
+	builder.SetInsertPoint(cond);
+	Value *b = visit(w->cond); // todo: get a real out of it
+	Value *c = builder.CreateFCmpOGT(
+		b, ConstantFP::get(Type::getDoubleTy(context), 0.5)
+	);
+	builder.CreateCondBr(c, loop, after);
+	
+	f->getBasicBlockList().push_back(loop);
+	builder.SetInsertPoint(loop);
+	visit(w->stmt);
+	builder.CreateBr(cond);
+	
+	f->getBasicBlockList().push_back(after);
+	builder.SetInsertPoint(after);
+	
+	return 0;
 }
 
 Value *node_codegen::visit_dostatement(dostatement *d) {
+	Function *f = builder.GetInsertBlock()->getParent();
+	BasicBlock *loop = BasicBlock::Create(context, "loop");
+	BasicBlock *cond = BasicBlock::Create(context, "cond");
+	BasicBlock *after = BasicBlock::Create(context, "after");
 	
+	builder.CreateBr(loop);
+	
+	f->getBasicBlockList().push_back(loop);
+	builder.SetInsertPoint(loop);
+	visit(d->stmt);
+	builder.CreateBr(cond);
+	
+	f->getBasicBlockList().push_back(cond);
+	builder.SetInsertPoint(cond);
+	Value *b = visit(d->cond); // todo: get a real out of it
+	Value *c = builder.CreateFCmpOLE(
+		b, ConstantFP::get(Type::getDoubleTy(context), 0.5)
+	);
+	builder.CreateCondBr(c, loop, after);
+	
+	f->getBasicBlockList().push_back(after);
+	builder.SetInsertPoint(after);
+	
+	return 0;
 }
 
 Value *node_codegen::visit_repeatstatement(repeatstatement *r) {
+	Value *start = ConstantFP::get(Type::getDoubleTy(context), 0);
+	Value *end = visit(r->expr);
 	
+	Function *f = builder.GetInsertBlock()->getParent();
+	BasicBlock *loop = BasicBlock::Create(context, "loop");
+	BasicBlock *after = BasicBlock::Create(context, "after");
+	
+	BasicBlock *init = builder.GetInsertBlock();
+	builder.CreateBr(loop);
+	
+	f->getBasicBlockList().push_back(loop);
+	builder.SetInsertPoint(loop);
+	
+	// phi node on start
+	PHINode *inc = builder.CreatePHI(Type::getDoubleTy(context), "inc");
+	inc->addIncoming(start, init);
+	
+	visit(r->stmt);
+	
+	// phi node on continue
+	Value *next = builder.CreateFAdd(
+		inc, ConstantFP::get(Type::getDoubleTy(context), 1)
+	);
+	BasicBlock *last = builder.GetInsertBlock();
+	inc->addIncoming(next, last);
+	
+	// todo: check with GM's rounding behavior
+	Value *done = builder.CreateFCmpOGE(next, end);
+	builder.CreateCondBr(done, loop, after);
+	
+	f->getBasicBlockList().push_back(after);
+	builder.SetInsertPoint(after);
+	
+	return 0;
 }
 
 Value *node_codegen::visit_forstatement(forstatement *f) {
+	visit(f->init);
 	
+	Function *fn = builder.GetInsertBlock()->getParent();
+	BasicBlock *loop = BasicBlock::Create(context, "loop");
+	BasicBlock *cond = BasicBlock::Create(context, "cond");
+	BasicBlock *after = BasicBlock::Create(context, "after");
+	
+	builder.CreateBr(cond);
+	
+	fn->getBasicBlockList().push_back(cond);
+	builder.SetInsertPoint(cond);
+	Value *b = visit(f->cond); // todo: get a real out of it
+	Value *c = builder.CreateFCmpOGT(
+		b, ConstantFP::get(Type::getDoubleTy(context), 0.5)
+	);
+	builder.CreateCondBr(c, loop, after);
+	
+	fn->getBasicBlockList().push_back(loop);
+	builder.SetInsertPoint(loop);
+	visit(f->stmt);
+	visit(f->inc);
+	builder.CreateBr(cond);
+	
+	fn->getBasicBlockList().push_back(after);
+	builder.SetInsertPoint(after);
+	
+	return 0;
 }
 
 Value *node_codegen::visit_switchstatement(switchstatement *s) {
