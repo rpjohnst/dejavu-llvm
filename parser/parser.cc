@@ -74,8 +74,9 @@ expression *parser::paren_nud(token) {
 }
 
 expression *parser::infix_led(token t, expression *left) {
+	token_type type = t.type == equals ? is_equals : t.type;
 	return new binary(
-		t.type, left, getexpression(symbols[t.type].precedence)
+		type, left, getexpression(symbols[t.type].precedence)
 	);
 }
 

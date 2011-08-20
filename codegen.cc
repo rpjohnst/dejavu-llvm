@@ -242,7 +242,31 @@ Value *node_codegen::visit_block(block *b) {
 }
 
 Value *node_codegen::visit_ifstatement(ifstatement *i) {
+	Value *b = visit(i->cond); // get a real out of it
+	Value *cond = builder.CreateFCmpOGT(
+		b, ConstantFP::get(Type::getDoubleTy(context), 0.5)
+	);
 	
+	Function *f = builder.GetInsertBlock()->getParent();
+	BasicBlock *branch_true = BasicBlock::Create(context, "then");
+	BasicBlock *branch_false = BasicBlock::Create(context, "else");
+	BasicBlock *merge = BasicBlock::Create(context, "merge");
+	
+	builder.CreateCondBr(cond, branch_true, branch_false);
+	
+	f->getBasicBlockList().push_back(branch_true);
+	builder.SetInsertPoint(branch_true);
+	visit(i->branch_true);
+	builder.CreateBr(merge);
+	
+	f->getBasicBlockList().push_back(branch_false);
+	builder.SetInsertPoint(branch_false);
+	if (i->branch_false)
+		visit(i->branch_false);
+	builder.CreateBr(merge);
+	
+	f->getBasicBlockList().push_back(merge);
+	builder.SetInsertPoint(merge);
 }
 
 Value *node_codegen::visit_whilestatement(whilestatement *w) {
