@@ -48,3 +48,5 @@ do {
 
 for (asdf = 4 asdf < 5 asdf += 1;;;;;)
 	break
+
+return 7;

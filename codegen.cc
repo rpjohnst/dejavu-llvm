@@ -279,6 +279,9 @@ Value *node_codegen::visit_whilestatement(whilestatement *w) {
 	
 	builder.CreateBr(cond);
 	
+	BasicBlock *save_loop = current_loop, *save_end = current_end;
+	current_loop = cond; current_end = after;
+	
 	f->getBasicBlockList().push_back(cond);
 	builder.SetInsertPoint(cond);
 	Value *b = visit(w->cond); // todo: get a real out of it
@@ -295,6 +298,8 @@ Value *node_codegen::visit_whilestatement(whilestatement *w) {
 	f->getBasicBlockList().push_back(after);
 	builder.SetInsertPoint(after);
 	
+	current_loop = save_loop; current_end = save_end;
+	
 	return 0;
 }
 
@@ -305,6 +310,9 @@ Value *node_codegen::visit_dostatement(dostatement *d) {
 	BasicBlock *after = BasicBlock::Create(context, "after");
 	
 	builder.CreateBr(loop);
+	
+	BasicBlock *save_loop = current_loop, *save_end = current_end;
+	current_loop = cond; current_end = after;
 	
 	f->getBasicBlockList().push_back(loop);
 	builder.SetInsertPoint(loop);
@@ -322,6 +330,8 @@ Value *node_codegen::visit_dostatement(dostatement *d) {
 	f->getBasicBlockList().push_back(after);
 	builder.SetInsertPoint(after);
 	
+	current_loop = save_loop; current_end = save_end;
+	
 	return 0;
 }
 
@@ -335,6 +345,9 @@ Value *node_codegen::visit_repeatstatement(repeatstatement *r) {
 	
 	BasicBlock *init = builder.GetInsertBlock();
 	builder.CreateBr(loop);
+	
+	BasicBlock *save_loop = current_loop, *save_end = current_end;
+	current_loop = loop; current_end = after;
 	
 	f->getBasicBlockList().push_back(loop);
 	builder.SetInsertPoint(loop);
@@ -359,6 +372,8 @@ Value *node_codegen::visit_repeatstatement(repeatstatement *r) {
 	f->getBasicBlockList().push_back(after);
 	builder.SetInsertPoint(after);
 	
+	current_loop = save_loop; current_end = save_end;
+	
 	return 0;
 }
 
@@ -368,9 +383,13 @@ Value *node_codegen::visit_forstatement(forstatement *f) {
 	Function *fn = builder.GetInsertBlock()->getParent();
 	BasicBlock *loop = BasicBlock::Create(context, "loop");
 	BasicBlock *cond = BasicBlock::Create(context, "cond");
+	BasicBlock *inc = BasicBlock::Create(context, "inc");
 	BasicBlock *after = BasicBlock::Create(context, "after");
 	
 	builder.CreateBr(cond);
+	
+	BasicBlock *save_loop = current_loop, *save_end = current_end;
+	current_loop = inc; current_end = after;
 	
 	fn->getBasicBlockList().push_back(cond);
 	builder.SetInsertPoint(cond);
@@ -383,11 +402,17 @@ Value *node_codegen::visit_forstatement(forstatement *f) {
 	fn->getBasicBlockList().push_back(loop);
 	builder.SetInsertPoint(loop);
 	visit(f->stmt);
+	builder.CreateBr(inc);
+	
+	fn->getBasicBlockList().push_back(inc);
+	builder.SetInsertPoint(inc);
 	visit(f->inc);
 	builder.CreateBr(cond);
 	
 	fn->getBasicBlockList().push_back(after);
 	builder.SetInsertPoint(after);
+	
+	current_loop = save_loop; current_end = save_end;
 	
 	return 0;
 }
@@ -401,11 +426,26 @@ Value *node_codegen::visit_withstatement(withstatement *w) {
 }
 
 Value *node_codegen::visit_jump(jump *j) {
+	switch (j->type) {
+	default: return 0;
 	
+	case kw_exit:
+		return builder.CreateCall(get_function("exit_event", 0));
+	
+	case kw_break: builder.CreateBr(current_end); break;
+	case kw_continue: builder.CreateBr(current_loop); break;
+	}
+	
+	Function *f = builder.GetInsertBlock()->getParent();
+	BasicBlock *cont = BasicBlock::Create(context, "cont", f);
+	builder.SetInsertPoint(cont);
+	
+	return 0;
 }
 
 Value *node_codegen::visit_returnstatement(returnstatement *r) {
-	
+	Value *ret = visit(r->expr);
+	builder.CreateRet(ret);
 }
 
 Value *node_codegen::visit_casestatement(casestatement *c) {

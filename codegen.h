@@ -47,7 +47,10 @@ private:
 	llvm::LLVMContext context;
 	llvm::IRBuilder<> builder;
 	llvm::Module module;
+	
 	std::map<std::string, llvm::AllocaInst*> scope;
+	llvm::BasicBlock *current_loop;
+	llvm::BasicBlock *current_end;
 };
 
 #endif
