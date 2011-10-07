@@ -41,14 +41,11 @@ bool ishexdigit(char c) {
 	return isdigit(c) || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F');
 }
 
-std::map<std::string, token_type> keywords;
+struct keyword_table : public std::map<std::string, token_type> {
+	keyword_table();
+} keywords;
 
-}
-
-token_stream::token_stream(file_buffer& b) :
-	row(1), col(0), buffer(b), current(b.begin()), buffer_end(b.end()) {
-	
-	// todo: don't initialize these for every lexer
+keyword_table::keyword_table() {
 	keywords["begin"] = l_brace;
 	keywords["end"] = r_brace;
 	keywords["not"] = exclaim;
@@ -57,6 +54,12 @@ token_stream::token_stream(file_buffer& b) :
 	keywords["xor"] = caretcaret;
 #	define KEYWORD(X) keywords[#X] = kw_ ## X;
 #	include "tokens.tbl"
+}
+
+}
+
+token_stream::token_stream(file_buffer& b) :
+	row(1), col(0), buffer(b), current(b.begin()), buffer_end(b.end()) {
 }
 
 // todo: potential cleanup/optimization with a switch statement
