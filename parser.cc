@@ -167,8 +167,11 @@ statement *parser::expr_std() {
 	}
 	
 	if (!isassignment(current.type)) {
+		token e = current;
+		while (!symbols[current.type].std) advance();
+		
 		return error_stmt(unexpected_token_error(
-			current, "assignment operator"
+			e, "assignment operator"
 		));
 	}
 	
