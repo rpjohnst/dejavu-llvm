@@ -11,17 +11,18 @@ public:
 	
 	void push_back(const unexpected_token_error &e) {
 		printf(
-			"%s:%lu:%lu: error: unexpected ",
+			"%s:%lu:%lu: error: unexpected '",
 			name, e.unexpected.row, e.unexpected.col
 		);
 		print_token(e.unexpected);
 		
 		if (e.expected) {
-			printf("; expected %s", e.expected);
+			printf("'; expected %s", e.expected);
 		}
 		else {
-			printf("; expected ");
+			printf("'; expected '");
 			print_token(token(e.expected_token, 0, 0));
+			printf("'");
 		}
 		
 		printf("\n");
