@@ -368,7 +368,7 @@ symbol_table::symbol_table() {
 	symbols[real].nud = symbols[string].nud =
 	symbols[kw_self].nud = symbols[kw_other].nud =
 	symbols[kw_all].nud = symbols[kw_noone].nud =
-	symbols[kw_global].nud =
+	symbols[kw_global].nud = symbols[kw_local].nud =
 	symbols[kw_true].nud = symbols[kw_false].nud =
 	&parser::id_nud;
 	
@@ -409,13 +409,14 @@ symbol_table::symbol_table() {
 	infix(pipepipe, 10);
 	infix(caretcaret, 10);
 	
-	symbols[kw_var].std =
-	symbols[kw_globalvar].std = &parser::var_std;
+	symbols[kw_var].std = symbols[kw_globalvar].std =
+	&parser::var_std;
 	
 	symbols[name].std = symbols[l_paren].std =
 	symbols[kw_self].std = symbols[kw_other].std =
 	symbols[kw_all].std = symbols[kw_noone].std =
-	symbols[kw_global].std = &parser::expr_std;
+	symbols[kw_global].std = symbols[kw_local].std =
+	&parser::expr_std;
 	
 	symbols[l_brace].std = &parser::brace_std;
 	

@@ -12,7 +12,8 @@ qux[1,2] = baz
 
 self.foo = foo
 global.bar = bar
-baz.qux = qux
+local.qux = qux
+baz.qux = local.qux
 
 if foo = 3 then
 begin

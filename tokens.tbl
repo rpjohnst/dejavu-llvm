@@ -75,6 +75,7 @@ KEYWORD(other)
 KEYWORD(all)
 KEYWORD(noone)
 KEYWORD(global)
+KEYWORD(local)
 
 KEYWORD(globalvar)
 KEYWORD(var)
