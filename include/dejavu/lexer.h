@@ -1,15 +1,14 @@
 #ifndef TOKEN_H
 #define TOKEN_H
 
-#include <stdexcept>
 #include <cstddef>
-#include "disallow_copy.h"
+#include <stdexcept>
 
 class file_buffer;
 
 enum token_type {
 #define TOK(X) X,
-#include "tokens.tbl"
+#include "dejavu/tokens.tbl"
 };
 
 struct token {
@@ -46,8 +45,6 @@ private:
 	
 	file_buffer& buffer;
 	const char *current, *buffer_end;
-	
-	DISALLOW_COPY(token_stream);
 };
 
 #endif

@@ -1,9 +1,9 @@
-#include "lexer.h"
+#include "dejavu/lexer.h"
+#include "dejavu/file.h"
+#include <cstdlib>
 #include <map>
 #include <sstream>
 #include <string>
-#include <cstdlib>
-#include "file.h"
 
 namespace {
 
@@ -53,7 +53,7 @@ keyword_table::keyword_table() {
 	keywords["or"] = pipepipe;
 	keywords["xor"] = caretcaret;
 #	define KEYWORD(X) keywords[#X] = kw_ ## X;
-#	include "tokens.tbl"
+#	include "dejavu/tokens.tbl"
 }
 
 }

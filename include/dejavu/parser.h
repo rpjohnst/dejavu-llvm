@@ -1,13 +1,12 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+#include "dejavu/lexer.h"
+#include "dejavu/node.h"
 #include <exception>
 #include <vector>
 #include <map>
 #include <algorithm>
-#include "disallow_copy.h"
-#include "lexer.h"
-#include "node.h"
 
 struct unexpected_token_error {
 	unexpected_token_error(token unexpected, const char *expected) :
@@ -76,8 +75,6 @@ private:
 	token current;
 	
 	error_stream& errors;
-	
-	DISALLOW_COPY(parser);
 };
 
 typedef statement *(parser::*std_parser)();

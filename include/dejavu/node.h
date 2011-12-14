@@ -16,9 +16,6 @@ public:
 	explicit node(node_type type) : type(type) {}
 	
 	node_type type;
-
-private:
-	DISALLOW_COPY(node);
 };
 
 struct expression : public node {

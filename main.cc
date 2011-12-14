@@ -1,9 +1,8 @@
 #include <cstdio>
-#include <deque>
-#include "file.h"
-#include "lexer.h"
-#include "parser.h"
-#include "printer.h"
+#include "dejavu/file.h"
+#include "dejavu/lexer.h"
+#include "dejavu/parser.h"
+#include "dejavu/printer.h"
 
 class error_printer : public error_stream {
 public:

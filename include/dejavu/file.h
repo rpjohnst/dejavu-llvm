@@ -1,9 +1,8 @@
 #ifndef FILE_H
 #define FILE_H
 
-#include <cassert>
 #include <fcntl.h>
-#include "disallow_copy.h"
+#include <cassert>
 
 class file_buffer {
 public:
@@ -23,8 +22,6 @@ public:
 private:
 	size_t length;
 	char *buffer;
-	
-	DISALLOW_COPY(file_buffer);
 };
 
 #endif

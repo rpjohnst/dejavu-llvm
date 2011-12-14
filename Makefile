@@ -1,13 +1,13 @@
 # toolchain configuration
 
-CXX := g++
-CPPFLAGS := -Wall -Wextra
+CXX := clang++
+CPPFLAGS := -Wall -Wextra -g
 CXXFLAGS :=
 LDFLAGS :=
 
 # gather source files
 
-SOURCES := $(shell find -name \*.cc)
+SOURCES := $(shell find -name '*.cc')
 OBJECTS := $(SOURCES:.cc=.o)
 DEPENDENCIES := $(OBJECTS:.o=.d)
 
@@ -18,19 +18,16 @@ DEPENDENCIES := $(OBJECTS:.o=.d)
 all: compiler
 
 clean:
-	rm -f compiler $(OBJECTS) $(DEPENDENCIES)
+	$(RM) compiler $(OBJECTS) $(DEPENDENCIES)
 
 # rules and dependencies
 
 compiler: $(OBJECTS)
-	$(CXX) $(LDFLAGS) -o $@ $^
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
+%.o %.d: %.cc
+	$(CXX) -c -Iinclude -MMD -MP -MT '$*.o $*.d' $(CPPFLAGS) $(CXXFLAGS) -o $*.o $<
+
+ifneq ($(MAKECMDGOALS),clean)
 -include $(DEPENDENCIES)
-
-# dependency targets must be separate to avoid over-building
-
-%.o: %.cc
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c -o $*.o $<
-
-%.d: %.cc
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MM -MP -MT '$*.o $*.d' -o $@ $<
+endif
