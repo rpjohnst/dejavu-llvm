@@ -11,9 +11,9 @@ enum node_type {
 #include "nodes.tbl"
 };
 
-class node {
-public:
+struct node {
 	explicit node(node_type type) : type(type) {}
+	virtual ~node() {}
 	
 	node_type type;
 };
