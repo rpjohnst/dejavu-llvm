@@ -1,25 +1,18 @@
-#include "codegen.h"
-#include <algorithm>
+#include "dejavu/codegen.h"
 #include "llvm/DerivedTypes.h"
 #include "llvm/Constants.h"
+#include <algorithm>
 
 using namespace llvm;
 
 node_codegen::node_codegen() :
 	builder(context), module("", context) {
 	
-	Type *variant = StructType::get(
-		context,
+	Type *types[] = {
 		Type::getInt32Ty(context),
-		StructType::get(
-			context,
-			Type::getInt32Ty(context),
-			Type::getInt8PtrTy(context),
-			NULL
-		),
-		NULL
-	);
-	module.addTypeName("variant", variant);
+		StructType::get(Type::getInt32Ty(context), Type::getInt32Ty(context), NULL)
+	};
+	StructType::create(types, "variant");
 }
 
 Module &node_codegen::get_module(node *program) {
@@ -73,7 +66,7 @@ Value *node_codegen::visit_value(value *v) {
 		Constant *indices[] = { zero, zero };
 		
 		Constant *data = ConstantExpr::getGetElementPtr(
-			string, indices, 2, true
+			string, indices, true
 		);
 		Constant *length = ConstantInt::get(
 			Type::getInt32Ty(context), v->t.string.length
@@ -194,13 +187,10 @@ Value *node_codegen::visit_call(call *c) {
 	std::string name(f->t.string.data, f->t.string.length);
 	Function *function = get_function(name.c_str(), c->args.size());
 	
-	std::vector<Value*> args(c->args.size());
-	std::transform(
-		c->args.begin(), c->args.end(),
-		args.begin(), vector_codegen(*this)
-	);
+	Value *args[c->args.size()];
+	std::transform(c->args.begin(), c->args.end(), args, vector_codegen(*this));
 	
-	return builder.CreateCall(function, args.begin(), args.end());
+	return builder.CreateCall(function, ArrayRef<Value*>(args, c->args.size()));
 }
 
 Value *node_codegen::visit_statement_error(statement_error*) {
@@ -353,7 +343,7 @@ Value *node_codegen::visit_repeatstatement(repeatstatement *r) {
 	builder.SetInsertPoint(loop);
 	
 	// phi node on start
-	PHINode *inc = builder.CreatePHI(Type::getDoubleTy(context), "inc");
+	PHINode *inc = builder.CreatePHI(Type::getDoubleTy(context), 2, "inc");
 	inc->addIncoming(start, init);
 	
 	visit(r->stmt);
@@ -455,13 +445,11 @@ Value *node_codegen::visit_casestatement(casestatement *c) {
 Function *node_codegen::get_function(const char *name, int args) {
 	Function *function = module.getFunction(name);
 	if (!function) {
-		const Type *variant = module.getTypeByName("variant");
-		FunctionType *type = FunctionType::get(
-			variant, std::vector<const Type*>(args, variant), false
-		);
-		function = Function::Create(
-			type, Function::ExternalLinkage, name, &module
-		);
+		Type *variant = module.getTypeByName("variant");
+		std::vector<Type*> vargs(args, variant);
+		FunctionType *type = FunctionType::get(variant, vargs, false);
+
+		function = Function::Create(type, Function::ExternalLinkage, name, &module);
 	}
 	return function;
 }

@@ -1,4 +1,5 @@
 #include <cstdio>
+#include "dejavu/codegen.h"
 #include "dejavu/file.h"
 #include "dejavu/lexer.h"
 #include "dejavu/parser.h"

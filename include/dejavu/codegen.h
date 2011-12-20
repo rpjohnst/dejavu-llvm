@@ -1,12 +1,12 @@
 #ifndef CODEGEN_H
 #define CODEGEN_H
 
-#include <map>
-#include <string>
+#include "dejavu/node_visitor.h"
 #include "llvm/LLVMContext.h"
 #include "llvm/Support/IRBuilder.h"
 #include "llvm/Module.h"
-#include "node_visitor.h"
+#include <map>
+#include <string>
 
 class node_codegen : public node_visitor<node_codegen, llvm::Value*> {
 public:

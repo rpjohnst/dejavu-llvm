@@ -8,7 +8,7 @@ LDLIBS :=
 
 # llvm configuration
 
-LLVM_DIR := ../llvm-build/Debug/bin
+LLVM_DIR := ../llvm-install-dbg/bin
 LLVM_CONFIG := $(LLVM_DIR)/llvm-config
 
 CXXFLAGS += $(shell $(LLVM_CONFIG) --cxxflags)
