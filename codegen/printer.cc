@@ -7,25 +7,25 @@ void print_token(const token& t) {
 	case unexpected:
 		printf("%.*s", (int)t.string.length, t.string.data);
 		break;
-	
+
 	case name:
 		printf("%.*s", (int)t.string.length, t.string.data);
 		break;
-	
+
 	case real:
 		printf("%g", t.real);
 		break;
-	
+
 	case string:
 		printf("\"%.*s\"", (int)t.string.length, t.string.data);
 		break;
-	
+
 #	define KEYWORD(X) case kw_ ## X: printf(#X); break;
 #	include "dejavu/tokens.tbl"
-	
+
 #	define OPERATOR(X, Y) case X: printf(Y); break;
 #	include "dejavu/tokens.tbl"
-	
+
 	default: ; // do nothing
 	}
 }
@@ -42,12 +42,12 @@ void node_printer::visit_value(value *v) {
 
 void node_printer::visit_unary(unary *u) {
 	print_token(token(u->op, 0, 0));
-	
+
 	int p = precedence;
 	precedence = 70;
-	
+
 	visit(u->right);
-	
+
 	precedence = p;
 }
 
@@ -57,13 +57,13 @@ void node_printer::visit_binary(binary *b) {
 	}
 	int p = precedence;
 	precedence = symbols[b->op].precedence;
-	
+
 	visit(b->left);
 	if (b->op != dot) printf(" ");
 	print_token(token(b->op, 0, 0));
 	if (b->op != dot) printf(" ");
 	visit(b->right);
-	
+
 	precedence = p;
 	if (symbols[b->op].precedence < precedence) {
 		printf(")");
@@ -71,27 +71,27 @@ void node_printer::visit_binary(binary *b) {
 }
 
 void node_printer::visit_subscript(subscript *s) {
-	visit(s->array);
+	print_token(s->array);
 	printf("[");
-	
+
 	int p = precedence;
 	precedence = 0;
-	
+
 	print_list(s->indices.begin(), s->indices.end());
-	
+
 	precedence = p;
-	
+
 	printf("]");
 }
 
 void node_printer::visit_call(call *c) {
 	if (precedence >= 80) printf("(");
-	
-	visit(c->function);
+
+	print_token(c->function);
 	printf("(");
 	print_list(c->args.begin(), c->args.end());
 	printf(")");
-	
+
 	if (precedence >= 80) printf(")");
 }
 
@@ -134,7 +134,7 @@ void node_printer::visit_ifstatement(ifstatement *i) {
 	if (i->branch_false) {
 		printf("\n");
 		indent(); printf("else");
-		
+
 		if (i->branch_false->type != ifstatement_node) {
 			printf("\n"); print_branch(i->branch_false);
 		}
@@ -194,7 +194,7 @@ void node_printer::visit_casestatement(casestatement *c) {
 	else {
 		printf("default");
 	}
-	
+
 	printf(":");
 }
 

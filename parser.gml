@@ -20,7 +20,7 @@ begin
 	// comment
 	var bla;
 	bla = 0 | 3 & $00fAe
-	
+
 	if (bar == 6)
 		bla = ~bla
 }

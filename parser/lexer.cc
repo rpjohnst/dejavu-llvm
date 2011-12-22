@@ -29,7 +29,7 @@ bool isoperator(char c) {
 	case '|': case '&': case '^': case '~':
 	case '=': case '<': case '>':
 	case '!': return true;
-	
+
 	default: return false;
 	}
 }
@@ -65,13 +65,13 @@ token_stream::token_stream(file_buffer& b) :
 // todo: potential cleanup/optimization with a switch statement
 token token_stream::gettoken() {
 	skipwhitespace();
-	
+
 	// skip comments
 	// todo: can we pull this out into a helper function?
 	// the control flow interacts weirdly with whitespace and division
 	if (*current == '/') {
 		// don't increment current yet, it might be a / token
-		
+
 		// single-line comment
 		if (*(current + 1) == '/') {
 			current++;
@@ -82,7 +82,7 @@ token token_stream::gettoken() {
 		else if (*(current + 1) == '*') {
 			current += 2;
 			col += 2;
-			
+
 			while (
 				(*current++ != '*' || *current != '/') &&
 				(current + 1 != buffer_end)
@@ -92,7 +92,7 @@ token token_stream::gettoken() {
 					skipnewline();
 				}
 			}
-			
+
 			current++;
 			col++;
 		}
@@ -100,32 +100,32 @@ token token_stream::gettoken() {
 		else {
 			return getoperator();
 		}
-		
+
 		return gettoken();
 	}
-	
+
 	if (isnamestart(*current))
 		return getname();
-	
+
 	if (
 		isoperator(*current) &&
-		
+
 		// we need a special case for stupid numbers like .25
 		(*current != '.' || !isdigit(*(current + 1)))
 	)
 		return getoperator();
-	
+
 	if (isdigit(*current) || *current == '$' || *current == '.')
 		return getnumber();
-	
+
 	if (*current == '"' || *current == '\'')
 		return getstring();
-	
+
 	// eof
 	if (current == buffer_end) {
 		return token(eof, row, col);
 	}
-	
+
 	// error
 	token u = token(unexpected, row, ++col);
 	u.string.data = current++; u.string.length = 1;
@@ -153,7 +153,7 @@ void token_stream::skipwhitespace() {
 void token_stream::skipnewline() {
 	row += 1;
 	col = 0;
-	
+
 	if (*current == '\n' && *(current + 1) == '\r') {
 		current++;
 	}
@@ -164,19 +164,19 @@ void token_stream::skipnewline() {
 token token_stream::getname() {
 	token t(name, row, col);
 	t.string.data = current;
-	
+
 	do {
 		current++;
 	} while (isname(*current));
 	t.string.length = current - t.string.data;
-	
+
 	col += t.string.length;
-	
+
 	// todo: figure out a better way than constructing an std::string?
 	std::string key = std::string(t.string.data, t.string.length);
 	if (keywords.count(key))
 		t.type = keywords[key];
-	
+
 	return t;
 }
 
@@ -184,7 +184,7 @@ token token_stream::getname() {
 // if there is none, behavior is undefined
 token token_stream::getoperator() {
 	token t(unexpected, row, col);
-	
+
 	// todo: can we use tokens.tbl here for maintainability? it just
 	// needs to be put in the right order for e.g. a regex parser
 	col++;
@@ -196,7 +196,7 @@ token token_stream::getoperator() {
 	case ')': t.type = r_paren; return t;
 	case '[': t.type = l_square; return t;
 	case ']': t.type = r_square; return t;
-	
+
 	case ',': t.type = comma; return t;
 	case '.': t.type = dot; return t;
 	case ';': t.type = semicolon; return t;
@@ -205,9 +205,9 @@ token token_stream::getoperator() {
 		case '=': col++; current++; t.type = equals; return t;
 		default: t.type = colon; return t;
 		}
-	
+
 	case '~': t.type = tilde; return t;
-	
+
 	case '=':
 		switch (*current) {
 		case '=': col++; current++; t.type = is_equals; return t;
@@ -230,7 +230,7 @@ token token_stream::getoperator() {
 		case '=': col++; current++; t.type = greater_equals; return t;
 		default: t.type = greater; return t;
 		}
-	
+
 	case '+':
 		switch (*current) {
 		case '=': col++; current++; t.type = plus_equals; return t;
@@ -251,7 +251,7 @@ token token_stream::getoperator() {
 		case '=': col++; current++; t.type = div_equals; return t;
 		default: t.type = divide; return t;
 		}
-	
+
 	case '&':
 		switch (*current) {
 		case '=': col++; current++; t.type = and_equals; return t;
@@ -270,7 +270,7 @@ token token_stream::getoperator() {
 		case '^': col++; current++; t.type = caretcaret; return t;
 		default: t.type = bit_xor; return t;
 		}
-	
+
 	default: return t;
 	}
 }
@@ -279,16 +279,16 @@ token token_stream::getoperator() {
 // if there is none, behavior is undefined
 token token_stream::getnumber() {
 	token t(real, row, col);
-	
+
 	char *end;
 	if (*current == '$')
 		t.real = strtoul(current + 1, &end, 16);
 	else
 		t.real = strtod(current, &end);
-	
+
 	col += end - current;
 	current = end;
-	
+
 	return t;
 }
 
@@ -298,17 +298,17 @@ token token_stream::getstring() {
 	token t(string, row, col);
 	char delim = *current++;
 	t.string.data = current;
-	
+
 	do {
 		current++;
-		
+
 		col += 1;
 		if (isnewline(*current))
 			skipnewline();
 	} while (*current != delim);
 	t.string.length = current - t.string.data;
-	
+
 	current++;
-	
+
 	return t;
 }

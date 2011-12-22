@@ -11,10 +11,10 @@
 struct unexpected_token_error {
 	unexpected_token_error(token unexpected, const char *expected) :
 		unexpected(unexpected), expected(expected) {}
-	
+
 	unexpected_token_error(token unexpected, token_type exp) :
 		unexpected(unexpected), expected_token(exp) {}
-	
+
 	token unexpected;
 	const char *expected;
 	token_type expected_token;
@@ -26,7 +26,7 @@ struct error_stream {
 
 class parser {
 	friend class symbol_table;
-	
+
 public:
 	parser(token_stream& l, error_stream& e);
 	node *getprogram();
@@ -34,24 +34,24 @@ public:
 private:
 	// expressions
 	expression *getexpression(int prec = 0);
-	
+
 	expression *id_nud(token t);
 	expression *name_nud(token t);
 	expression *prefix_nud(token t);
 	expression *paren_nud(token t);
-	
+
 	expression *infix_led(token t, expression *left);
 	expression *dot_led(token t, expression *left);
-	expression *square_led(token t, expression *left);
-	expression *paren_led(token t, expression *left);
-	
+	expression *square_led(token t, token left);
+	expression *paren_led(token t, token left);
+
 	// statements
 	statement *getstatement();
-	
+
 	statement *expr_std();
 	statement *var_std();
 	statement *brace_std();
-	
+
 	statement *if_std();
 	statement *while_std();
 	statement *do_std();
@@ -59,21 +59,21 @@ private:
 	statement *for_std();
 	statement *switch_std();
 	statement *with_std();
-	
+
 	statement *jump_std();
 	statement *return_std();
 	statement *case_std();
-	
+
 	// utilities
 	token advance();
 	token advance(token_type t);
-	
+
 	statement_error *error_stmt(const unexpected_token_error&);
 	expression_error *error_expr(const unexpected_token_error&);
-	
+
 	token_stream& lexer;
 	token current;
-	
+
 	error_stream& errors;
 };
 

@@ -8,12 +8,9 @@ LDLIBS :=
 
 # llvm configuration
 
-LLVM_DIR := ../llvm-install-dbg/bin
-LLVM_CONFIG := $(LLVM_DIR)/llvm-config
-
-CXXFLAGS += $(shell $(LLVM_CONFIG) --cxxflags)
-LDFLAGS += $(shell $(LLVM_CONFIG) --ldflags)
-LDLIBS += $(shell $(LLVM_CONFIG) --libs core)
+CXXFLAGS += $(shell llvm-config --cxxflags)
+LDFLAGS += $(shell llvm-config --ldflags)
+LDLIBS += $(shell llvm-config --libs core)
 
 # gather source files
 
@@ -35,7 +32,8 @@ clean:
 compiler: $(OBJECTS)
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-%.o %.d: %.cc
+# don't put %.d as a dependency or things get built twice
+%.o: %.cc
 	$(CXX) -c -Iinclude -MMD -MP -MT '$*.o $*.d' $(CPPFLAGS) $(CXXFLAGS) -o $*.o $<
 
 ifneq ($(MAKECMDGOALS),clean)
