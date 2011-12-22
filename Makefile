@@ -7,10 +7,9 @@ LDFLAGS :=
 LDLIBS :=
 
 # llvm configuration
-
 CXXFLAGS += $(shell llvm-config --cxxflags)
 LDFLAGS += $(shell llvm-config --ldflags)
-LDLIBS += $(shell llvm-config --libs core)
+LDLIBS += $(shell llvm-config --libs core native scalaropts ipo)
 
 # gather source files
 

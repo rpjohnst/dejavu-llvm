@@ -15,6 +15,9 @@ struct node_visitor {
 #		include "nodes.tbl"
 		}
 	}
+
+#	define NODE(X) ret visit_ ## X(X*) { return ret(); }
+#	include "nodes.tbl"
 };
 
 #endif

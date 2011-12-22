@@ -1,9 +1,22 @@
-#include <cstdio>
 #include "dejavu/codegen.h"
 #include "dejavu/file.h"
 #include "dejavu/lexer.h"
 #include "dejavu/parser.h"
 #include "dejavu/printer.h"
+
+#include "llvm/PassManager.h"
+#include "llvm/Analysis/Passes.h"
+#include "llvm/Analysis/Verifier.h"
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/IPO.h"
+
+#include "llvm/Support/Host.h"
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/Support/TargetRegistry.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/Target/TargetData.h"
+
+#include <cstdio>
 
 class error_printer : public error_stream {
 public:
@@ -39,11 +52,21 @@ void test_compiler() {
 
 	token_stream tokens(file);
 	parser parser(tokens, errors);
-
-	node_codegen compiler;
 	node *program = parser.getprogram();
+
+	llvm::InitializeNativeTarget();
+	std::string triple = llvm::sys::getHostTriple(), error;
+	const llvm::Target *target = llvm::TargetRegistry::lookupTarget(triple, error);
+	const llvm::TargetMachine *machine = target->createTargetMachine(triple, "", "");
+	const llvm::TargetData *td = machine->getTargetData();
+
+	node_codegen compiler(td);
 	llvm::Module &module = compiler.get_module(program);
+
+	verifyModule(module);
 	module.dump();
+
+	delete machine;
 	delete program;
 }
 

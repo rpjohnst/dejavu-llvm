@@ -1,18 +1,43 @@
 #include "dejavu/codegen.h"
 #include "llvm/DerivedTypes.h"
 #include "llvm/Constants.h"
+#include "llvm/Target/TargetData.h"
 #include <algorithm>
 
 using namespace llvm;
 
-node_codegen::node_codegen() :
-	builder(context), module("", context) {
-	
-	Type *types[] = {
-		Type::getInt32Ty(context),
-		StructType::get(Type::getInt32Ty(context), Type::getInt32Ty(context), NULL)
-	};
-	StructType::create(types, "variant");
+node_codegen::node_codegen(const TargetData *td) : builder(context), module("", context), td(td) {
+	real_type = builder.getDoubleTy();
+
+	Type *string[] = { builder.getInt32Ty(), builder.getInt8PtrTy() };
+	string_type = StructType::create(string, "string");
+
+	Type *union_type = (
+		td->getTypeAllocSize(real_type) > td->getTypeAllocSize(string_type)
+	) ? real_type : string_type;
+
+	Type *variant[] = { builder.getInt1Ty(), union_type };
+	variant_type = StructType::create(variant, "variant");
+
+	Type *dim = Type::getInt16Ty(context), *contents = variant_type->getPointerTo();
+	Type *var[] = { dim, dim, contents };
+	var_type = StructType::create(var, "var");
+
+	// todo: move to a separate runtime?
+	Type *lookup_args[] = { real_type, string_type };
+	Type *lookup_ret = variant_type->getPointerTo();
+	FunctionType *lookup_type = FunctionType::get(lookup_ret, lookup_args, false);
+	lookup = Function::Create(lookup_type, Function::ExternalLinkage, "lookup", &module);
+
+	FunctionType *to_real_type = FunctionType::get(
+		real_type, variant_type->getPointerTo(), false
+	);
+	to_real = Function::Create(to_real_type, Function::ExternalLinkage, "to_real", &module);
+
+	FunctionType *to_string_type = FunctionType::get(
+		string_type, variant_type->getPointerTo(), false
+	);
+	to_string = Function::Create(to_string_type, Function::ExternalLinkage, "to_string", &module);
 }
 
 Module &node_codegen::get_module(node *program) {
@@ -29,83 +54,28 @@ Module &node_codegen::get_module(node *program) {
 	return module;
 }
 
-Value *node_codegen::visit_expression_error(expression_error*) {
-	return 0;
-}
-
 Value *node_codegen::visit_value(value *v) {
 	switch (v->t.type) {
 	default: return 0;
-	
-	case real: {
-		Constant *real = ConstantFP::get(
-			Type::getDoubleTy(context), v->t.real
-		);
-		return builder.CreateCall(get_function("create_real", 1), real);
-	}
-	
-	case string: {
-		Constant *array = ConstantArray::get(
-			context,
-			StringRef(v->t.string.data, v->t.string.length),
-			false
-		);
-		GlobalVariable *string = new GlobalVariable(
-			module,
-			array->getType(), true,
-			GlobalValue::PrivateLinkage, array,
-			"string"
-		);
-		Constant *zero = ConstantInt::get(
-			Type::getInt32Ty(context), 0
-		);
-		Constant *indices[] = { zero, zero };
-		
-		Constant *data = ConstantExpr::getGetElementPtr(
-			string, indices, true
-		);
-		Constant *length = ConstantInt::get(
-			Type::getInt32Ty(context), v->t.string.length
-		);
-		
-		Function *create_string = get_function("create_string", 2);
-		return builder.CreateCall2(create_string, data, length);
-	}
-	
+
 	case name: {
 		std::string name(v->t.string.data, v->t.string.length);
-		return builder.CreateLoad(scope[name], name);
+		Value *indices[] = { builder.getInt32(0), builder.getInt32(2) };
+		Value *ptr = builder.CreateInBoundsGEP(scope[name], indices);
+		return builder.CreateLoad(ptr);
 	}
-	
-	case kw_self: {
-		Constant *real = ConstantFP::get(Type::getDoubleTy(context), -1);
-		return builder.CreateCall(get_function("create_real", 1), real);
-	}
-	case kw_other: {
-		Constant *real = ConstantFP::get(Type::getDoubleTy(context), -2);
-		return builder.CreateCall(get_function("create_real", 1), real);
-	}
-	case kw_all: {
-		Constant *real = ConstantFP::get(Type::getDoubleTy(context), -3);
-		return builder.CreateCall(get_function("create_real", 1), real);
-	}
-	case kw_noone: {
-		Constant *real = ConstantFP::get(Type::getDoubleTy(context), -4);
-		return builder.CreateCall(get_function("create_real", 1), real);
-	}
-	case kw_global: {
-		Constant *real = ConstantFP::get(Type::getDoubleTy(context), -5);
-		return builder.CreateCall(get_function("create_real", 1), real);
-	}
-	
-	case kw_true: {
-		Constant *real = ConstantFP::get(Type::getDoubleTy(context), 1);
-		return builder.CreateCall(get_function("create_real", 1), real);
-	}
-	case kw_false: {
-		Constant *real = ConstantFP::get(Type::getDoubleTy(context), 0);
-		return builder.CreateCall(get_function("create_real", 1), real);
-	}
+
+	case real: return get_real(v->t.real);
+	case string: return get_string(v->t.string.length, v->t.string.data);
+
+	case kw_self: return get_real(-1);
+	case kw_other: return get_real(-2);
+	case kw_all: return get_real(-3);
+	case kw_noone: return get_real(-4);
+	case kw_global: return get_real(-5);
+
+	case kw_true: return get_real(1);
+	case kw_false: return get_real(0);
 	}
 }
 
@@ -119,19 +89,26 @@ Value *node_codegen::visit_unary(unary *u) {
 	case plus: name = "pos"; break;
 	}
 
-	return builder.CreateCall(get_function(name, 1), visit(u->right));
+	Value *operand = visit(u->right);
+	Value *result = builder.CreateAlloca(variant_type, 0);
+	builder.CreateCall2(get_function(name, 1), result, operand);
+	return result;
 }
 
 Value *node_codegen::visit_binary(binary *b) {
 	const char *name;
 	switch (b->op) {
 	default: return 0;
-	
-	case dot:
-		visit(b->left);
-		return visit_value(static_cast<value*>(b->right));
-		break;
-	
+
+	case dot: {
+		token &name = static_cast<value*>(b->right)->t;
+		return builder.CreateCall2(
+			lookup,
+			builder.CreateCall(to_real, visit(b->left)),
+			builder.CreateCall(to_string, get_string(name.string.length, name.string.data))
+		);
+	}
+
 	// todo: can we pull this out of a table instead of copypasting?
 	case less: name = "less"; break;
 	case less_equals: name = "less_equals"; break;
@@ -159,37 +136,76 @@ Value *node_codegen::visit_binary(binary *b) {
 	case kw_mod: name = "mod"; break;
 	}
 
-	return builder.CreateCall2(get_function(name, 2), visit(b->left), visit(b->right));
+	Value *left = visit(b->left);
+	Value *right = visit(b->right);
+	Value *result = builder.CreateAlloca(variant_type);
+	builder.CreateCall3(get_function(name, 2), result, left, right);
+	return result;
 }
 
+// todo: {bounds,type,syntax} checking
 Value *node_codegen::visit_subscript(subscript *s) {
-	return 0;
-}
+	std::string name(s->array.string.data, s->array.string.length);
 
-struct vector_codegen {
-	vector_codegen(node_codegen &v) : v(v) {}
-	Value *operator() (expression *e) {
-		return v.visit(e);
+	Value *xindices[] = { builder.getInt32(0), builder.getInt32(0) };
+	Value *x16 = builder.CreateLoad(builder.CreateInBoundsGEP(scope[name], xindices));
+	Value *x = builder.CreateZExt(x16, builder.getInt32Ty());
+
+	// Value *yindices[] = { builder.getInt32(0), builder.getInt32(1) };
+	// Value *y16 = builder.CreateLoad(builder.CreateInBoundsGEP(scope[name], yindices));
+	// Value *y = builder.CreateZExt(y16, builder.getInt32Ty());
+
+	Value *aptr[] = { builder.getInt32(0), builder.getInt32(2) };
+	Value *variants = builder.CreateLoad(builder.CreateInBoundsGEP(scope[name], aptr));
+
+	std::vector<Value*> is;
+	is.reserve(s->indices.size());
+	for (std::vector<expression*>::iterator it = s->indices.begin(); it != s->indices.end(); ++it) {
+		is.push_back(visit(*it));
 	}
-	node_codegen &v;
-};
+
+	switch (is.size()) {
+	default: return 0;
+	case 0: {
+		return builder.CreateInBoundsGEP(variants, builder.getInt32(0));
+	}
+	case 1: {
+		Value *real = builder.CreateCall(to_real, is[0]);
+		Value *index = builder.CreateFPToUI(real, builder.getInt32Ty());
+		return builder.CreateInBoundsGEP(variants, index);
+	}
+	case 2: {
+		Value *ireal = builder.CreateCall(to_real, is[0]);
+		Value *i = builder.CreateFPToUI(ireal, builder.getInt32Ty());
+
+		Value *jreal = builder.CreateCall(to_real, is[1]);
+		Value *j = builder.CreateFPToUI(jreal, builder.getInt32Ty());
+
+		Value *index = builder.CreateNSWAdd(builder.CreateNSWMul(i, x), j);
+		return builder.CreateInBoundsGEP(variants, index);
+	}
+	}
+}
 
 Value *node_codegen::visit_call(call *c) {
 	std::string name(c->function.string.data, c->function.string.length);
 	Function *function = get_function(name.c_str(), c->args.size());
 
-	std::vector<Value*> args(c->args.size());
-	std::transform(c->args.begin(), c->args.end(), args.begin(), vector_codegen(*this));
+	std::vector<Value*> args;
+	args.reserve(c->args.size() + 1);
 
-	return builder.CreateCall(function, args);
+	args.push_back(builder.CreateAlloca(variant_type, 0));
+	for (std::vector<expression*>::iterator it = c->args.begin(); it != c->args.end(); ++it) {
+		args.push_back(visit(*it));
+	}
+
+	builder.CreateCall(function, args);
+	return args[0];
 }
 
-Value *node_codegen::visit_statement_error(statement_error*) {
-	return 0;
-}
-
+// todo: += -= etc.
 Value *node_codegen::visit_assignment(assignment *a) {
-	builder.CreateStore(visit(a->rvalue), get_lvalue(a->lvalue));
+	builder.CreateMemCpy(visit(a->lvalue), visit(a->rvalue), td->getTypeStoreSize(variant_type), 0);
 	return 0;
 }
 
@@ -201,9 +217,20 @@ Value *node_codegen::visit_invocation(invocation* i) {
 Value *node_codegen::visit_declaration(declaration *d) {
 	for (std::vector<value*>::iterator it = d->names.begin(); it != d->names.end(); ++it) {
 		std::string name((*it)->t.string.data, (*it)->t.string.length);
-		scope[name] = builder.CreateAlloca(
-			module.getTypeByName("variant"), 0, name
-		);
+		scope[name] = builder.CreateAlloca(var_type, 0);
+	
+		Value *x = builder.getInt16(1), *xindices[] = { builder.getInt32(0), builder.getInt32(0) };
+		Value *xptr = builder.CreateInBoundsGEP(scope[name], xindices);
+		builder.CreateStore(x, xptr);
+
+		Value *y = builder.getInt16(1), *yindices[] = { builder.getInt32(0), builder.getInt32(1) };
+		Value *yptr = builder.CreateInBoundsGEP(scope[name], yindices);
+		builder.CreateStore(y, yptr);
+
+		Value *variant = builder.CreateAlloca(variant_type, 0, name);
+		Value *vindices[] = { builder.getInt32(0), builder.getInt32(2) };
+		Value *vptr = builder.CreateInBoundsGEP(scope[name], vindices);
+		builder.CreateStore(variant, vptr);
 	}
 
 	return 0;
@@ -218,11 +245,9 @@ Value *node_codegen::visit_block(block *b) {
 }
 
 Value *node_codegen::visit_ifstatement(ifstatement *i) {
-	Value *b = visit(i->cond); // todo: get a real out of it
-	Value *cond = builder.CreateFCmpOGT(
-		b, ConstantFP::get(Type::getDoubleTy(context), 0.5)
-	);
-	
+	Value *expr = builder.CreateCall(to_real, visit(i->cond));
+	Value *cond = builder.CreateFCmpUGT(expr, ConstantFP::get(builder.getDoubleTy(), 0.5));
+
 	Function *f = builder.GetInsertBlock()->getParent();
 	BasicBlock *branch_true = BasicBlock::Create(context, "then");
 	BasicBlock *branch_false = BasicBlock::Create(context, "else");
@@ -255,15 +280,14 @@ Value *node_codegen::visit_whilestatement(whilestatement *w) {
 
 	builder.CreateBr(cond);
 
+	// todo: this is UGLY
 	BasicBlock *save_loop = current_loop, *save_end = current_end;
 	current_loop = cond; current_end = after;
 
 	f->getBasicBlockList().push_back(cond);
 	builder.SetInsertPoint(cond);
-	Value *b = visit(w->cond); // todo: get a real out of it
-	Value *c = builder.CreateFCmpOGT(
-		b, ConstantFP::get(Type::getDoubleTy(context), 0.5)
-	);
+	Value *expr = builder.CreateCall(to_real, visit(w->cond));
+	Value *c = builder.CreateFCmpUGT(expr, ConstantFP::get(builder.getDoubleTy(), 0.5));
 	builder.CreateCondBr(c, loop, after);
 
 	f->getBasicBlockList().push_back(loop);
@@ -297,11 +321,9 @@ Value *node_codegen::visit_dostatement(dostatement *d) {
 
 	f->getBasicBlockList().push_back(cond);
 	builder.SetInsertPoint(cond);
-	Value *b = visit(d->cond); // todo: get a real out of it
-	Value *c = builder.CreateFCmpOLE(
-		b, ConstantFP::get(Type::getDoubleTy(context), 0.5)
-	);
-	builder.CreateCondBr(c, loop, after);
+	Value *expr = builder.CreateCall(to_real, visit(d->cond));
+	Value *c = builder.CreateFCmpUGT(expr, ConstantFP::get(builder.getDoubleTy(), 0.5));
+	builder.CreateCondBr(c, after, loop);
 
 	f->getBasicBlockList().push_back(after);
 	builder.SetInsertPoint(after);
@@ -312,8 +334,8 @@ Value *node_codegen::visit_dostatement(dostatement *d) {
 }
 
 Value *node_codegen::visit_repeatstatement(repeatstatement *r) {
-	Value *start = ConstantFP::get(Type::getDoubleTy(context), 0);
-	Value *end = visit(r->expr);
+	Value *start = ConstantFP::get(builder.getDoubleTy(), 0);
+	Value *end = builder.CreateCall(to_real, visit(r->expr));
 
 	Function *f = builder.GetInsertBlock()->getParent();
 	BasicBlock *loop = BasicBlock::Create(context, "loop");
@@ -329,20 +351,18 @@ Value *node_codegen::visit_repeatstatement(repeatstatement *r) {
 	builder.SetInsertPoint(loop);
 
 	// phi node on start
-	PHINode *inc = builder.CreatePHI(Type::getDoubleTy(context), 2, "inc");
+	PHINode *inc = builder.CreatePHI(builder.getDoubleTy(), 2, "inc");
 	inc->addIncoming(start, init);
 
 	visit(r->stmt);
 
 	// phi node on continue
-	Value *next = builder.CreateFAdd(
-		inc, ConstantFP::get(Type::getDoubleTy(context), 1)
-	);
+	Value *next = builder.CreateFAdd(inc, ConstantFP::get(builder.getDoubleTy(), 1));
 	BasicBlock *last = builder.GetInsertBlock();
 	inc->addIncoming(next, last);
 
 	// todo: check with GM's rounding behavior
-	Value *done = builder.CreateFCmpOGE(next, end);
+	Value *done = builder.CreateFCmpULT(next, end);
 	builder.CreateCondBr(done, loop, after);
 
 	f->getBasicBlockList().push_back(after);
@@ -369,10 +389,8 @@ Value *node_codegen::visit_forstatement(forstatement *f) {
 
 	fn->getBasicBlockList().push_back(cond);
 	builder.SetInsertPoint(cond);
-	Value *b = visit(f->cond); // todo: get a real out of it
-	Value *c = builder.CreateFCmpOGT(
-		b, ConstantFP::get(Type::getDoubleTy(context), 0.5)
-	);
+	Value *expr = builder.CreateCall(to_real, visit(f->cond));
+	Value *c = builder.CreateFCmpUGT(expr, ConstantFP::get(builder.getDoubleTy(), 0.5));
 	builder.CreateCondBr(c, loop, after);
 
 	fn->getBasicBlockList().push_back(loop);
@@ -405,9 +423,7 @@ Value *node_codegen::visit_jump(jump *j) {
 	switch (j->type) {
 	default: return 0;
 
-	case kw_exit:
-		return builder.CreateCall(get_function("exit_event", 0));
-
+	case kw_exit: builder.CreateRetVoid(); break;
 	case kw_break: builder.CreateBr(current_end); break;
 	case kw_continue: builder.CreateBr(current_loop); break;
 	}
@@ -420,8 +436,13 @@ Value *node_codegen::visit_jump(jump *j) {
 }
 
 Value *node_codegen::visit_returnstatement(returnstatement *r) {
-	Value *ret = visit(r->expr);
-	builder.CreateRet(ret);
+	Value *ret = visit(r->expr); // todo: store in out-argument
+
+	builder.CreateRetVoid();
+
+	Function *f = builder.GetInsertBlock()->getParent();
+	BasicBlock *cont = BasicBlock::Create(context, "cont", f);
+	builder.SetInsertPoint(cont);
 
 	return 0;
 }
@@ -433,36 +454,44 @@ Value *node_codegen::visit_casestatement(casestatement *c) {
 Function *node_codegen::get_function(const char *name, int args) {
 	Function *function = module.getFunction(name);
 	if (!function) {
-		Type *variant = module.getTypeByName("variant");
-		std::vector<Type*> vargs(args, variant);
-		FunctionType *type = FunctionType::get(variant, vargs, false);
-
+		std::vector<Type*> vargs(args + 1, variant_type->getPointerTo());
+		FunctionType *type = FunctionType::get(builder.getVoidTy(), vargs, false);
 		function = Function::Create(type, Function::ExternalLinkage, name, &module);
+
+		Function::arg_iterator ai = function->arg_begin();
+		ai->addAttr(Attribute::NoAlias | Attribute::StructRet);
+		for (++ai; ai != function->arg_end(); ++ai) {
+			ai->addAttr(Attribute::ByVal);
+		}
 	}
 	return function;
 }
 
-AllocaInst *node_codegen::get_lvalue(expression *lvalue) {
-	switch (lvalue->type) {
-	default: return 0;
+Value *node_codegen::get_real(double val) {
+	Constant *contents[] = { builder.getInt1(0), ConstantFP::get(builder.getDoubleTy(), val) };
+	Constant *variant = ConstantStruct::getAnon(contents);
+	GlobalVariable *global = new GlobalVariable(
+		module, variant->getType(), true, GlobalValue::InternalLinkage, variant, "real"
+	);
+	return builder.CreateBitCast(global, variant_type->getPointerTo());
+}
 
-	case value_node: {
-		value *v = static_cast<value*>(lvalue);
-		std::string name(v->t.string.data, v->t.string.length);
-		return scope[name];
-	}
+Value *node_codegen::get_string(int length, const char *data) {
+	Constant *array = ConstantArray::get(context, StringRef(data, length), false);
+	GlobalVariable *str = new GlobalVariable(
+		module, array->getType(), true, GlobalValue::PrivateLinkage, array, ".str"
+	);
 
-	case binary_node: {
-		binary *b = static_cast<binary*>(lvalue);
-		if (b->op != dot) return 0;
-		
-		Value *left = visit(b->left);
-		return get_lvalue(b->right);
-	}
-	
-	case subscript_node: {
-		subscript *s = static_cast<subscript*>(lvalue);
-		return get_lvalue(s->array);
-	}
-	}
+	Value *indices[] = { builder.getInt32(0), builder.getInt32(0) };
+	Constant *string[] = {
+		builder.getInt32(length), cast<Constant>(builder.CreateInBoundsGEP(str, indices))
+	};
+	Constant *val = ConstantStruct::get(string_type, ArrayRef<Constant*>(string));
+
+	Constant *contents[] = { builder.getInt1(1), val };
+	Constant *variant = ConstantStruct::getAnon(contents);
+	GlobalVariable *global = new GlobalVariable(
+		module, variant->getType(), true, GlobalValue::InternalLinkage, variant, "string"
+	);
+	return builder.CreateBitCast(global, variant_type->getPointerTo());
 }
