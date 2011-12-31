@@ -41,8 +41,17 @@ node_codegen::node_codegen(const TargetData *td) : builder(context), module("", 
 }
 
 Module &node_codegen::get_module(node *program) {
-	FunctionType *type = FunctionType::get(Type::getVoidTy(context), false);
+	// todo: refactor this into a function code generator
+	Type *args[] = { variant_type->getPointerTo() };
+	FunctionType *type = FunctionType::get(builder.getVoidTy(), args, false);
 	Function *function = Function::Create(type, Function::ExternalLinkage, "main", &module);
+
+	Function::arg_iterator ai = function->arg_begin();
+	ai->addAttr(Attribute::NoAlias | Attribute::StructRet);
+	return_value = ai;
+	for (++ai; ai != function->arg_end(); ++ai) {
+		ai->addAttr(Attribute::ByVal);
+	}
 
 	BasicBlock *entry = BasicBlock::Create(context, "entry", function);
 	builder.SetInsertPoint(entry);
@@ -436,8 +445,7 @@ Value *node_codegen::visit_jump(jump *j) {
 }
 
 Value *node_codegen::visit_returnstatement(returnstatement *r) {
-	Value *ret = visit(r->expr); // todo: store in out-argument
-
+	builder.CreateMemCpy(visit(r->expr), return_value, td->getTypeStoreSize(variant_type), 0);
 	builder.CreateRetVoid();
 
 	Function *f = builder.GetInsertBlock()->getParent();

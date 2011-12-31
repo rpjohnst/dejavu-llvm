@@ -60,6 +60,7 @@ private:
 	llvm::Function *to_string;
 
 	std::map<std::string, llvm::AllocaInst*> scope;
+	llvm::Value *return_value;
 	llvm::BasicBlock *current_loop;
 	llvm::BasicBlock *current_end;
 };
