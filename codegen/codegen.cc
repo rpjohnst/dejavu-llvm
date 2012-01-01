@@ -82,6 +82,7 @@ Value *node_codegen::visit_value(value *v) {
 	case kw_all: return get_real(-3);
 	case kw_noone: return get_real(-4);
 	case kw_global: return get_real(-5);
+	case kw_local: return get_real(-6);
 
 	case kw_true: return get_real(1);
 	case kw_false: return get_real(0);
