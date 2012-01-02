@@ -2,7 +2,7 @@
 #include "llvm/DerivedTypes.h"
 #include "llvm/Constants.h"
 #include "llvm/Target/TargetData.h"
-#include <algorithm>
+#include <tuple>
 
 using namespace llvm;
 
@@ -22,6 +22,8 @@ node_codegen::node_codegen(const TargetData *td) : builder(context), module("", 
 	Type *dim = Type::getInt16Ty(context), *contents = variant_type->getPointerTo();
 	Type *var[] = { dim, dim, contents };
 	var_type = StructType::create(var, "var");
+
+	current_loop = current_end = 0;
 
 	// todo: move to a separate runtime?
 	Type *lookup_args[] = { real_type, string_type };
@@ -255,14 +257,13 @@ Value *node_codegen::visit_block(block *b) {
 }
 
 Value *node_codegen::visit_ifstatement(ifstatement *i) {
-	Value *expr = builder.CreateCall(to_real, visit(i->cond));
-	Value *cond = builder.CreateFCmpUGT(expr, ConstantFP::get(builder.getDoubleTy(), 0.5));
-
 	Function *f = builder.GetInsertBlock()->getParent();
 	BasicBlock *branch_true = BasicBlock::Create(context, "then");
 	BasicBlock *branch_false = BasicBlock::Create(context, "else");
 	BasicBlock *merge = BasicBlock::Create(context, "merge");
 
+	Value *expr = builder.CreateCall(to_real, visit(i->cond));
+	Value *cond = builder.CreateFCmpUGT(expr, ConstantFP::get(builder.getDoubleTy(), 0.5));
 	builder.CreateCondBr(cond, branch_true, branch_false);
 
 	f->getBasicBlockList().push_back(branch_true);
@@ -282,6 +283,19 @@ Value *node_codegen::visit_ifstatement(ifstatement *i) {
 	return 0;
 }
 
+namespace {
+	template <typename... types>
+	class save_context {
+	public:
+		save_context(types&... args) : context(args...), data(args...) {}
+		~save_context() { context = data; }
+
+	private:
+		std::tuple<types&...> context;
+		std::tuple<types...> data;
+	};
+}
+
 Value *node_codegen::visit_whilestatement(whilestatement *w) {
 	Function *f = builder.GetInsertBlock()->getParent();
 	BasicBlock *loop = BasicBlock::Create(context, "loop");
@@ -290,25 +304,23 @@ Value *node_codegen::visit_whilestatement(whilestatement *w) {
 
 	builder.CreateBr(cond);
 
-	// todo: this is UGLY
-	BasicBlock *save_loop = current_loop, *save_end = current_end;
-	current_loop = cond; current_end = after;
-
 	f->getBasicBlockList().push_back(cond);
 	builder.SetInsertPoint(cond);
-	Value *expr = builder.CreateCall(to_real, visit(w->cond));
-	Value *c = builder.CreateFCmpUGT(expr, ConstantFP::get(builder.getDoubleTy(), 0.5));
-	builder.CreateCondBr(c, loop, after);
+	builder.CreateCondBr(to_bool(w->cond), loop, after);
 
 	f->getBasicBlockList().push_back(loop);
 	builder.SetInsertPoint(loop);
-	visit(w->stmt);
+	{
+		// this is ugly, wish I could pass args to visit...
+		save_context<BasicBlock*, BasicBlock*> save(current_loop, current_end);
+		current_loop = cond;
+		current_end = after;
+		visit(w->stmt);
+	}
 	builder.CreateBr(cond);
 
 	f->getBasicBlockList().push_back(after);
 	builder.SetInsertPoint(after);
-
-	current_loop = save_loop; current_end = save_end;
 
 	return 0;
 }
@@ -321,91 +333,83 @@ Value *node_codegen::visit_dostatement(dostatement *d) {
 
 	builder.CreateBr(loop);
 
-	BasicBlock *save_loop = current_loop, *save_end = current_end;
-	current_loop = cond; current_end = after;
-
 	f->getBasicBlockList().push_back(loop);
 	builder.SetInsertPoint(loop);
-	visit(d->stmt);
+	{
+		save_context<BasicBlock*, BasicBlock*> save(current_loop, current_end);
+		current_loop = cond;
+		current_end = after;
+		visit(d->stmt);
+	}
 	builder.CreateBr(cond);
 
 	f->getBasicBlockList().push_back(cond);
 	builder.SetInsertPoint(cond);
-	Value *expr = builder.CreateCall(to_real, visit(d->cond));
-	Value *c = builder.CreateFCmpUGT(expr, ConstantFP::get(builder.getDoubleTy(), 0.5));
-	builder.CreateCondBr(c, after, loop);
+	builder.CreateCondBr(to_bool(d->cond), after, loop);
 
 	f->getBasicBlockList().push_back(after);
 	builder.SetInsertPoint(after);
-
-	current_loop = save_loop; current_end = save_end;
 
 	return 0;
 }
 
 Value *node_codegen::visit_repeatstatement(repeatstatement *r) {
-	Value *start = ConstantFP::get(builder.getDoubleTy(), 0);
-	Value *end = builder.CreateCall(to_real, visit(r->expr));
-
 	Function *f = builder.GetInsertBlock()->getParent();
 	BasicBlock *loop = BasicBlock::Create(context, "loop");
 	BasicBlock *after = BasicBlock::Create(context, "after");
-
 	BasicBlock *init = builder.GetInsertBlock();
-	builder.CreateBr(loop);
 
-	BasicBlock *save_loop = current_loop, *save_end = current_end;
-	current_loop = loop; current_end = after;
+	Value *start = ConstantFP::get(builder.getDoubleTy(), 0);
+	Value *end = builder.CreateCall(to_real, visit(r->expr));
+	builder.CreateBr(loop);
 
 	f->getBasicBlockList().push_back(loop);
 	builder.SetInsertPoint(loop);
-
-	// phi node on start
 	PHINode *inc = builder.CreatePHI(builder.getDoubleTy(), 2, "inc");
-	inc->addIncoming(start, init);
+	{
+		inc->addIncoming(start, init);
 
-	visit(r->stmt);
+		save_context<BasicBlock*, BasicBlock*> save(current_loop, current_end);
+		current_loop = loop;
+		current_end = after;
+		visit(r->stmt);
 
-	// phi node on continue
-	Value *next = builder.CreateFAdd(inc, ConstantFP::get(builder.getDoubleTy(), 1));
-	BasicBlock *last = builder.GetInsertBlock();
-	inc->addIncoming(next, last);
-
+		Value *next = builder.CreateFAdd(inc, ConstantFP::get(builder.getDoubleTy(), 1));
+		BasicBlock *last = builder.GetInsertBlock();
+		inc->addIncoming(next, last);
+	}
 	// todo: check with GM's rounding behavior
-	Value *done = builder.CreateFCmpULT(next, end);
+	Value *done = builder.CreateFCmpULT(inc, end);
 	builder.CreateCondBr(done, loop, after);
 
 	f->getBasicBlockList().push_back(after);
 	builder.SetInsertPoint(after);
 
-	current_loop = save_loop; current_end = save_end;
-
 	return 0;
 }
 
 Value *node_codegen::visit_forstatement(forstatement *f) {
-	visit(f->init);
-
 	Function *fn = builder.GetInsertBlock()->getParent();
 	BasicBlock *loop = BasicBlock::Create(context, "loop");
 	BasicBlock *cond = BasicBlock::Create(context, "cond");
 	BasicBlock *inc = BasicBlock::Create(context, "inc");
 	BasicBlock *after = BasicBlock::Create(context, "after");
 
+	visit(f->init);
 	builder.CreateBr(cond);
-
-	BasicBlock *save_loop = current_loop, *save_end = current_end;
-	current_loop = inc; current_end = after;
 
 	fn->getBasicBlockList().push_back(cond);
 	builder.SetInsertPoint(cond);
-	Value *expr = builder.CreateCall(to_real, visit(f->cond));
-	Value *c = builder.CreateFCmpUGT(expr, ConstantFP::get(builder.getDoubleTy(), 0.5));
-	builder.CreateCondBr(c, loop, after);
+	builder.CreateCondBr(to_bool(f->cond), loop, after);
 
 	fn->getBasicBlockList().push_back(loop);
 	builder.SetInsertPoint(loop);
-	visit(f->stmt);
+	{
+		save_context<BasicBlock*, BasicBlock*> save(current_loop, current_end);
+		current_loop = inc;
+		current_end = after;
+		visit(f->stmt);
+	}
 	builder.CreateBr(inc);
 
 	fn->getBasicBlockList().push_back(inc);
@@ -415,8 +419,6 @@ Value *node_codegen::visit_forstatement(forstatement *f) {
 
 	fn->getBasicBlockList().push_back(after);
 	builder.SetInsertPoint(after);
-
-	current_loop = save_loop; current_end = save_end;
 
 	return 0;
 }
@@ -434,8 +436,14 @@ Value *node_codegen::visit_jump(jump *j) {
 	default: return 0;
 
 	case kw_exit: builder.CreateRetVoid(); break;
-	case kw_break: builder.CreateBr(current_end); break;
-	case kw_continue: builder.CreateBr(current_loop); break;
+	case kw_break:
+		if (current_end) builder.CreateBr(current_end);
+		else builder.CreateRetVoid();
+		break;
+	case kw_continue:
+		if (current_loop) builder.CreateBr(current_loop);
+		else builder.CreateRetVoid();
+		break;
 	}
 
 	Function *f = builder.GetInsertBlock()->getParent();
@@ -503,4 +511,11 @@ Value *node_codegen::get_string(int length, const char *data) {
 		module, variant->getType(), true, GlobalValue::InternalLinkage, variant, "string"
 	);
 	return builder.CreateBitCast(global, variant_type->getPointerTo());
+}
+
+// todo: combine these next two
+
+Value *node_codegen::to_bool(node *cond) {
+	Value *expr = builder.CreateCall(to_real, visit(cond));
+	return builder.CreateFCmpUGT(expr, ConstantFP::get(builder.getDoubleTy(), 0.5));
 }

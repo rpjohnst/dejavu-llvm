@@ -44,6 +44,7 @@ private:
 	llvm::Function *get_function(const char *name, int args);
 	llvm::Value *get_real(double val);
 	llvm::Value *get_string(int length, const char *val);
+	llvm::Value *to_bool(node *val);
 
 	llvm::LLVMContext context;
 	llvm::IRBuilder<> builder;
@@ -61,6 +62,7 @@ private:
 
 	std::map<std::string, llvm::AllocaInst*> scope;
 	llvm::Value *return_value;
+
 	llvm::BasicBlock *current_loop;
 	llvm::BasicBlock *current_end;
 };

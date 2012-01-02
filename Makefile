@@ -33,7 +33,7 @@ compiler: $(OBJECTS)
 
 # don't put %.d as a dependency or things get built twice
 %.o: %.cc
-	$(CXX) -c -Iinclude -MMD -MP -MT '$*.o $*.d' $(CPPFLAGS) $(CXXFLAGS) -o $*.o $<
+	$(CXX) -std=c++11 -c -Iinclude -MMD -MP -MT '$*.o $*.d' $(CPPFLAGS) $(CXXFLAGS) -o $*.o $<
 
 ifneq ($(MAKECMDGOALS),clean)
 -include $(DEPENDENCIES)

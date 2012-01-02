@@ -63,8 +63,8 @@ void test_compiler() {
 	node_codegen compiler(td);
 	llvm::Module &module = compiler.get_module(program);
 
-	verifyModule(module);
 	module.dump();
+	verifyModule(module);
 
 	delete machine;
 	delete program;
