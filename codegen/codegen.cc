@@ -23,8 +23,6 @@ node_codegen::node_codegen(const TargetData *td) : builder(context), module("", 
 	Type *var[] = { dim, dim, contents };
 	var_type = StructType::create(var, "var");
 
-	current_loop = current_end = 0;
-
 	// todo: move to a separate runtime?
 	Type *lookup_args[] = { real_type, string_type };
 	Type *lookup_ret = variant_type->getPointerTo();
@@ -423,7 +421,76 @@ Value *node_codegen::visit_forstatement(forstatement *f) {
 	return 0;
 }
 
+// todo: switch on a hash rather than generating an if/else chain
 Value *node_codegen::visit_switchstatement(switchstatement *s) {
+	Function *fn = builder.GetInsertBlock()->getParent();
+	BasicBlock *switch_default = BasicBlock::Create(context, "default");
+	BasicBlock *dead = BasicBlock::Create(context, "dead");
+	BasicBlock *after = BasicBlock::Create(context, "after");
+
+	Value *switch_expr = visit(s->expr);
+	Function::BasicBlockListType::iterator switch_cond = builder.GetInsertBlock();
+
+	fn->getBasicBlockList().push_back(dead);
+	builder.SetInsertPoint(dead);
+	{
+		save_context<Value*, BasicBlock*, Function::BasicBlockListType::iterator, BasicBlock*> save(
+			current_switch, current_default, current_cond, current_end
+		);
+		current_switch = switch_expr;
+		current_default = switch_default;
+		current_cond = switch_cond;
+		current_end = after;
+		visit(s->stmts);
+
+		builder.SetInsertPoint(current_cond);
+		builder.CreateBr(current_default);
+
+		builder.SetInsertPoint(&fn->getBasicBlockList().back());
+		if (!current_default->getParent()) {
+			builder.CreateBr(current_default);
+
+			fn->getBasicBlockList().push_back(current_default);
+			builder.SetInsertPoint(current_default);
+		}
+	}
+	builder.CreateBr(after);
+
+	fn->getBasicBlockList().push_back(after);
+	builder.SetInsertPoint(after);
+
+	return 0;
+}
+
+Value *node_codegen::visit_casestatement(casestatement *c) {
+	Function *fn = builder.GetInsertBlock()->getParent();
+
+	if (!c->expr) {
+		builder.CreateBr(current_default);
+		fn->getBasicBlockList().push_back(current_default);
+		builder.SetInsertPoint(current_default);
+
+		return 0;
+	}
+
+	BasicBlock *switch_case = BasicBlock::Create(context, "case");
+	BasicBlock *next_cond = BasicBlock::Create(context, "next");
+
+	builder.SetInsertPoint(current_cond);
+
+	Value *case_expr = visit(c->expr);
+	Value *cond = is_equal(current_switch, case_expr);
+	builder.CreateCondBr(cond, switch_case, next_cond);
+
+	fn->getBasicBlockList().insertAfter(current_cond, next_cond);
+	current_cond = next_cond;
+
+	builder.SetInsertPoint(&fn->getBasicBlockList().back());
+	builder.CreateBr(switch_case);
+
+	fn->getBasicBlockList().push_back(switch_case);
+	builder.SetInsertPoint(switch_case);
+
 	return 0;
 }
 
@@ -461,10 +528,6 @@ Value *node_codegen::visit_returnstatement(returnstatement *r) {
 	BasicBlock *cont = BasicBlock::Create(context, "cont", f);
 	builder.SetInsertPoint(cont);
 
-	return 0;
-}
-
-Value *node_codegen::visit_casestatement(casestatement *c) {
 	return 0;
 }
 
@@ -517,5 +580,12 @@ Value *node_codegen::get_string(int length, const char *data) {
 
 Value *node_codegen::to_bool(node *cond) {
 	Value *expr = builder.CreateCall(to_real, visit(cond));
+	return builder.CreateFCmpUGT(expr, ConstantFP::get(builder.getDoubleTy(), 0.5));
+}
+
+Value *node_codegen::is_equal(Value *a, Value *b) {
+	Value *res = builder.CreateAlloca(variant_type);
+	builder.CreateCall3(get_function("is_equal", 2), res, a, b);
+	Value *expr = builder.CreateCall(to_real, res);
 	return builder.CreateFCmpUGT(expr, ConstantFP::get(builder.getDoubleTy(), 0.5));
 }
