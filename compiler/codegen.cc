@@ -12,9 +12,8 @@ node_codegen::node_codegen(const TargetData *td) : builder(context), module("", 
 	Type *string[] = { builder.getInt32Ty(), builder.getInt8PtrTy() };
 	string_type = StructType::create(string, "string");
 
-	Type *union_type = (
-		td->getTypeAllocSize(real_type) > td->getTypeAllocSize(string_type)
-	) ? real_type : string_type;
+	union_diff = td->getTypeAllocSize(real_type) - td->getTypeAllocSize(string_type);
+	Type *union_type = union_diff > 0 ? real_type : string_type;
 
 	Type *variant[] = { builder.getInt8Ty(), union_type };
 	variant_type = StructType::create(variant, "variant");
@@ -99,8 +98,9 @@ Value *node_codegen::visit_unary(unary *u) {
 	case plus: name = "pos"; break;
 	}
 
-	Value *operand = visit(u->right);
-	Value *result = builder.CreateAlloca(variant_type, 0);
+	Value *result = builder.CreateAlloca(variant_type);
+	Value *operand = builder.CreateAlloca(variant_type);
+	builder.CreateMemCpy(operand, visit(u->right), td->getTypeStoreSize(variant_type), 0);
 	builder.CreateCall2(get_function(name, 1), result, operand);
 	return result;
 }
@@ -146,9 +146,11 @@ Value *node_codegen::visit_binary(binary *b) {
 	case kw_mod: name = "mod"; break;
 	}
 
-	Value *left = visit(b->left);
-	Value *right = visit(b->right);
+	Value *left = builder.CreateAlloca(variant_type);
+	Value *right = builder.CreateAlloca(variant_type);
 	Value *result = builder.CreateAlloca(variant_type);
+	builder.CreateMemCpy(left, visit(b->left), td->getTypeStoreSize(variant_type), 0);
+	builder.CreateMemCpy(right, visit(b->right), td->getTypeStoreSize(variant_type), 0);
 	builder.CreateCall3(get_function(name, 2), result, left, right);
 	return result;
 }
@@ -204,9 +206,11 @@ Value *node_codegen::visit_call(call *c) {
 	std::vector<Value*> args;
 	args.reserve(c->args.size() + 1);
 
-	args.push_back(builder.CreateAlloca(variant_type, 0));
+	args.push_back(builder.CreateAlloca(variant_type));
 	for (std::vector<expression*>::iterator it = c->args.begin(); it != c->args.end(); ++it) {
-		args.push_back(visit(*it));
+		Value *arg = builder.CreateAlloca(variant_type);
+		builder.CreateMemCpy(arg, visit(*it), td->getTypeStoreSize(variant_type), 0);
+		args.push_back(arg);
 	}
 
 	builder.CreateCall(function, args);
@@ -521,7 +525,7 @@ Value *node_codegen::visit_jump(jump *j) {
 }
 
 Value *node_codegen::visit_returnstatement(returnstatement *r) {
-	builder.CreateMemCpy(visit(r->expr), return_value, td->getTypeStoreSize(variant_type), 0);
+	builder.CreateMemCpy(return_value, visit(r->expr), td->getTypeStoreSize(variant_type), 0);
 	builder.CreateRetVoid();
 
 	Function *f = builder.GetInsertBlock()->getParent();
@@ -548,7 +552,11 @@ Function *node_codegen::get_function(const char *name, int args) {
 }
 
 Value *node_codegen::get_real(double val) {
-	Constant *contents[] = { builder.getInt1(0), ConstantFP::get(builder.getDoubleTy(), val) };
+	Constant *contents[] = {
+		builder.getInt8(0),
+		ConstantFP::get(builder.getDoubleTy(), val),
+		UndefValue::get(ArrayType::get(builder.getInt8Ty(), union_diff < 0 ? -union_diff : 0))
+	};
 	Constant *variant = ConstantStruct::getAnon(contents);
 	GlobalVariable *global = new GlobalVariable(
 		module, variant->getType(), true, GlobalValue::InternalLinkage, variant, "real"
@@ -568,7 +576,10 @@ Value *node_codegen::get_string(int length, const char *data) {
 	};
 	Constant *val = ConstantStruct::get(string_type, ArrayRef<Constant*>(string));
 
-	Constant *contents[] = { builder.getInt1(1), val };
+	Constant *contents[] = {
+		builder.getInt8(1), val,
+		UndefValue::get(ArrayType::get(builder.getInt8Ty(), union_diff > 0 ? union_diff : 0))
+	};
 	Constant *variant = ConstantStruct::getAnon(contents);
 	GlobalVariable *global = new GlobalVariable(
 		module, variant->getType(), true, GlobalValue::InternalLinkage, variant, "string"

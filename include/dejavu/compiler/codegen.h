@@ -53,9 +53,10 @@ private:
 	const llvm::TargetData *td;
 
 	llvm::Type *real_type;
-	llvm::StructType *string_type;
-	llvm::StructType *variant_type;
 	llvm::StructType *var_type;
+	llvm::StructType *variant_type;
+	llvm::StructType *string_type;
+	int union_diff;
 
 	llvm::Function *lookup;
 	llvm::Function *to_real;
