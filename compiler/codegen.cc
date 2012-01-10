@@ -1,4 +1,4 @@
-#include "dejavu/codegen.h"
+#include "dejavu/compiler/codegen.h"
 #include "llvm/DerivedTypes.h"
 #include "llvm/Constants.h"
 #include "llvm/Target/TargetData.h"
@@ -16,7 +16,7 @@ node_codegen::node_codegen(const TargetData *td) : builder(context), module("", 
 		td->getTypeAllocSize(real_type) > td->getTypeAllocSize(string_type)
 	) ? real_type : string_type;
 
-	Type *variant[] = { builder.getInt1Ty(), union_type };
+	Type *variant[] = { builder.getInt8Ty(), union_type };
 	variant_type = StructType::create(variant, "variant");
 
 	Type *dim = Type::getInt16Ty(context), *contents = variant_type->getPointerTo();

@@ -1,8 +1,8 @@
-#include "dejavu/codegen.h"
-#include "dejavu/file.h"
-#include "dejavu/lexer.h"
-#include "dejavu/parser.h"
-#include "dejavu/printer.h"
+#include "dejavu/compiler/printer.h"
+#include "dejavu/compiler/codegen.h"
+#include "dejavu/compiler/lexer.h"
+#include "dejavu/compiler/parser.h"
+#include "dejavu/system/file.h"
 
 #include "llvm/PassManager.h"
 #include "llvm/Analysis/Passes.h"

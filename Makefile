@@ -1,40 +1,49 @@
+# top-level commands
+
+.PHONY: all
+all: gmlc runtime.bc
+
+.PHONY: clean
+clean:
+	$(RM) gmlc $(gmlc_OBJECTS) $(gmlc_DEPENDS) runtime.bc $(runtime_OBJECTS) $(runtime_DEPENDS)
+
 # toolchain configuration
 
 CXX := clang++
-CPPFLAGS := -Wall -Wextra -g
-CXXFLAGS :=
-LDFLAGS :=
-LDLIBS :=
+CXXFLAGS := -Wall -Wextra -g
 
-# llvm configuration
-CXXFLAGS += $(shell llvm-config --cxxflags)
-LDFLAGS += $(shell llvm-config --ldflags)
-LDLIBS += $(shell llvm-config --libs core native scalaropts ipo)
+DEPFLAGS = -MMD -MP -MT $@ -MT $*.d
 
-# gather source files
+# build the compiler
 
-SOURCES := $(shell find -name '*.cc')
-OBJECTS := $(SOURCES:.cc=.o)
-DEPENDENCIES := $(OBJECTS:.o=.d)
+gmlc_SOURCES := main.cc $(shell find compiler system -name '*.cc')
+gmlc_OBJECTS := $(gmlc_SOURCES:.cc=.o)
+gmlc_DEPENDS := $(gmlc_SOURCES:.cc=.d)
 
-# build targets
+gmlc_CPPFLAGS := $(shell llvm-config --cppflags)
+gmlc_LDFLAGS := $(shell llvm-config --ldflags)
+gmlc_LDLIBS := $(shell llvm-config --libs core native scalaropts ipo)
 
-.PHONY: all clean
+gmlc: $(gmlc_OBJECTS)
+	$(CXX) $(gmlc_LDFLAGS) -o $@ $^ $(gmlc_LDLIBS)
 
-all: compiler
-
-clean:
-	$(RM) compiler $(OBJECTS) $(DEPENDENCIES)
-
-# rules and dependencies
-
-compiler: $(OBJECTS)
-	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
-
-# don't put %.d as a dependency or things get built twice
 %.o: %.cc
-	$(CXX) -std=c++11 -c -Iinclude -MMD -MP -MT '$*.o $*.d' $(CPPFLAGS) $(CXXFLAGS) -o $*.o $<
+	$(CXX) -c -std=c++11 -Iinclude $(DEPFLAGS) $(CXXFLAGS) $(gmlc_CXXFLAGS) $(gmlc_CPPFLAGS) -o $@ $<
 
-ifneq ($(MAKECMDGOALS),clean)
--include $(DEPENDENCIES)
+# build the runtime
+
+runtime_SOURCES := $(shell find runtime -name '*.cc')
+runtime_OBJECTS := $(runtime_SOURCES:.cc=.bc)
+runtime_DEPENDS := $(runtime_SOURCES:.cc=.d)
+
+runtime.bc: $(runtime_OBJECTS)
+	llvm-link -o $@ $^
+
+%.bc: %.cc
+	$(CXX) -c -emit-llvm -std=c++11 -Iinclude $(DEPFLAGS) $(CXXFLAGS) -o $@ $<
+
+# include dependencies
+
+ifeq ($(filter clean, $(MAKECMDGOALS)),)
+-include $(gmlc_DEPENDS) $(runtime_DEPENDS)
 endif

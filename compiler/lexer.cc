@@ -1,5 +1,5 @@
-#include "dejavu/lexer.h"
-#include "dejavu/file.h"
+#include "dejavu/compiler/lexer.h"
+#include "dejavu/system/file.h"
 #include <cstdlib>
 #include <map>
 #include <sstream>
@@ -53,7 +53,7 @@ keyword_table::keyword_table() {
 	keywords["or"] = pipepipe;
 	keywords["xor"] = caretcaret;
 #	define KEYWORD(X) keywords[#X] = kw_ ## X;
-#	include "dejavu/tokens.tbl"
+#	include "dejavu/compiler/tokens.tbl"
 }
 
 }

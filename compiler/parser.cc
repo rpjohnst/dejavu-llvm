@@ -1,4 +1,4 @@
-#include "dejavu/parser.h"
+#include "dejavu/compiler/parser.h"
 
 symbol_table symbols;
 

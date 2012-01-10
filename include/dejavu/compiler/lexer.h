@@ -8,7 +8,7 @@ class file_buffer;
 
 enum token_type {
 #define TOK(X) X,
-#include "dejavu/tokens.tbl"
+#include "dejavu/compiler/tokens.tbl"
 };
 
 struct token {

@@ -1,8 +1,8 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-#include "dejavu/lexer.h"
-#include "dejavu/node.h"
+#include "dejavu/compiler/lexer.h"
+#include "dejavu/compiler/node.h"
 #include <exception>
 #include <vector>
 #include <map>

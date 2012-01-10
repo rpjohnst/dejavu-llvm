@@ -1,5 +1,5 @@
-#include "dejavu/printer.h"
-#include "dejavu/parser.h"
+#include "dejavu/compiler/printer.h"
+#include "dejavu/compiler/parser.h"
 #include <cstdio>
 
 void print_token(const token& t) {
@@ -21,10 +21,10 @@ void print_token(const token& t) {
 		break;
 
 #	define KEYWORD(X) case kw_ ## X: printf(#X); break;
-#	include "dejavu/tokens.tbl"
+#	include "dejavu/compiler/tokens.tbl"
 
 #	define OPERATOR(X, Y) case X: printf(Y); break;
-#	include "dejavu/tokens.tbl"
+#	include "dejavu/compiler/tokens.tbl"
 
 	default: ; // do nothing
 	}

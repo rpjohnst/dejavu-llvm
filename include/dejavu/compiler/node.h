@@ -3,12 +3,12 @@
 
 #include <vector>
 #include <algorithm>
-#include "lexer.h"
-#include "stl_helpers.h"
+#include "dejavu/compiler/lexer.h"
+#include "dejavu/stl_helpers.h"
 
 enum node_type {
 #define NODE(X) X ## _node,
-#include "nodes.tbl"
+#include "dejavu/compiler/nodes.tbl"
 };
 
 struct node {
