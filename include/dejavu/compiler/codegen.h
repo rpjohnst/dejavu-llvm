@@ -62,7 +62,7 @@ private:
 	llvm::Function *to_real;
 	llvm::Function *to_string;
 
-	std::map<std::string, llvm::AllocaInst*> scope;
+	std::map<std::string, llvm::Value*> scope;
 	llvm::Value *return_value;
 
 	llvm::BasicBlock *current_loop = 0;

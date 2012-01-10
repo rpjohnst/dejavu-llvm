@@ -24,7 +24,7 @@ node_codegen::node_codegen(const TargetData *td) : builder(context), module("", 
 
 	// todo: move to a separate runtime?
 	Type *lookup_args[] = { real_type, string_type };
-	Type *lookup_ret = variant_type->getPointerTo();
+	Type *lookup_ret = var_type->getPointerTo();
 	FunctionType *lookup_type = FunctionType::get(lookup_ret, lookup_args, false);
 	lookup = Function::Create(lookup_type, Function::ExternalLinkage, "lookup", &module);
 
@@ -68,8 +68,12 @@ Value *node_codegen::visit_value(value *v) {
 
 	case name: {
 		std::string name(v->t.string.data, v->t.string.length);
+		Value *var = scope.find(name) != scope.end() ? scope[name] : builder.CreateCall2(
+			lookup, ConstantFP::get(builder.getDoubleTy(), -1),
+			builder.CreateCall(to_string, get_string(v->t.string.length, v->t.string.data))
+		);
 		Value *indices[] = { builder.getInt32(0), builder.getInt32(2) };
-		Value *ptr = builder.CreateInBoundsGEP(scope[name], indices);
+		Value *ptr = builder.CreateInBoundsGEP(var, indices);
 		return builder.CreateLoad(ptr);
 	}
 
@@ -112,11 +116,13 @@ Value *node_codegen::visit_binary(binary *b) {
 
 	case dot: {
 		token &name = static_cast<value*>(b->right)->t;
-		return builder.CreateCall2(
-			lookup,
-			builder.CreateCall(to_real, visit(b->left)),
+		Value *var = builder.CreateCall2(
+			lookup, builder.CreateCall(to_real, visit(b->left)),
 			builder.CreateCall(to_string, get_string(name.string.length, name.string.data))
 		);
+		Value *indices[] = { builder.getInt32(0), builder.getInt32(2) };
+		Value *ptr = builder.CreateInBoundsGEP(var, indices);
+		return builder.CreateLoad(ptr);
 	}
 
 	// todo: can we pull this out of a table instead of copypasting?
