@@ -71,7 +71,7 @@ void node_printer::visit_binary(binary *b) {
 }
 
 void node_printer::visit_subscript(subscript *s) {
-	print_token(s->array);
+	visit(s->array);
 	printf("[");
 
 	int p = precedence;
@@ -85,14 +85,10 @@ void node_printer::visit_subscript(subscript *s) {
 }
 
 void node_printer::visit_call(call *c) {
-	if (precedence >= 80) printf("(");
-
-	print_token(c->function);
+	visit(c->function);
 	printf("(");
 	print_list(c->args.begin(), c->args.end());
 	printf(")");
-
-	if (precedence >= 80) printf(")");
 }
 
 void node_printer::visit_statement_error(statement_error*) {

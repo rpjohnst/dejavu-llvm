@@ -40,6 +40,7 @@ struct unary : public expression {
 	expression *right;
 };
 
+// todo: so much special handling for . - should it be its own node type?
 struct binary : public expression {
 	binary(token_type op, expression *left, expression *right) :
 		expression(binary_node), op(op), left(left), right(right) {}
@@ -50,24 +51,24 @@ struct binary : public expression {
 };
 
 struct subscript : public expression {
-	subscript(token array, std::vector<expression*>& indices) :
+	subscript(expression *array, std::vector<expression*>& indices) :
 		expression(subscript_node), array(array), indices(indices) {}
 	~subscript() {
 		std::for_each(indices.begin(), indices.end(), deleter<expression>);
 	}
 
-	token array;
+	expression *array;
 	std::vector<expression*> indices;
 };
 
 struct call : public expression {
-	call(token function, std::vector<expression*>& args) :
+	call(value *function, std::vector<expression*>& args) :
 		expression(call_node), function(function), args(args) {}
 	~call() {
 		std::for_each(args.begin(), args.end(), deleter<expression>);
 	}
 
-	token function;
+	value *function;
 	std::vector<expression*> args;
 };
 

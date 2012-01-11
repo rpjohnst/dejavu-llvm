@@ -1,5 +1,18 @@
 #include "dejavu/compiler/parser.h"
 
+bool isassignment(token_type t) {
+	switch (t) {
+	case equals:
+	case plus_equals: case minus_equals:
+	case times_equals: case div_equals:
+	case and_equals: case or_equals: case xor_equals:
+		return true;
+
+	default:
+		return false;
+	}
+}
+
 symbol_table symbols;
 
 parser::parser(token_stream& l, error_stream& e) :
@@ -36,6 +49,22 @@ expression *parser::getexpression(int prec) {
 	expression *left = (this->*n)(t);
 
 	while (prec < symbols[current.type].precedence) {
+		// fixme: is there a better way for led_parsers to reject ts and lefts?
+		if (
+			current.type == l_paren &&
+			!(left->type == value_node && static_cast<value*>(left)->t.type == name)
+		)
+			break;
+		if (
+			current.type == l_square &&
+			!(left->type == value_node && static_cast<value*>(left)->t.type == name) &&
+			!(left->type == binary_node && static_cast<binary*>(left)->op == dot)
+		)
+			break;
+		// fixme: is there a better way to tell if the previous expr was in parens?
+		if (current.type == l_square && t.type == l_paren)
+			break;
+
 		t = advance();
 
 		led_parser l = symbols[t.type].led;
@@ -53,14 +82,6 @@ expression *parser::getexpression(int prec) {
 
 expression *parser::id_nud(token t) {
 	return new value(t);
-}
-
-expression *parser::name_nud(token t) {
-	switch (current.type) {
-	case l_paren: return paren_led(advance(), t);
-	case l_square: return square_led(advance(), t);
-	default: return new value(t);
-	}
 }
 
 expression *parser::prefix_nud(token t) {
@@ -85,7 +106,7 @@ expression *parser::dot_led(token t, expression *left) {
 	return new binary(t.type, left, (this->*symbols[n.type].nud)(n));
 }
 
-expression *parser::square_led(token, token left) {
+expression *parser::square_led(token, expression *left) {
 	std::vector<expression*> indices;
 	while (current.type != r_square && current.type != eof) {
 		indices.push_back(getexpression());
@@ -111,7 +132,7 @@ expression *parser::square_led(token, token left) {
 	return new subscript(left, indices);
 }
 
-expression *parser::paren_led(token, token left) {
+expression *parser::paren_led(token, expression *left) {
 	std::vector<expression*> args;
 	while (current.type != r_paren && current.type != eof) {
 		args.push_back(getexpression(0));
@@ -126,7 +147,7 @@ expression *parser::paren_led(token, token left) {
 
 	advance(r_paren); // or expected comma
 
-	return new call(left, args);
+	return new call(static_cast<value*>(left), args);
 }
 
 statement *parser::getstatement() {
@@ -147,23 +168,10 @@ statement *parser::getstatement() {
 	return stmt;
 }
 
-bool isassignment(token_type t) {
-	switch (t) {
-	case equals:
-	case plus_equals: case minus_equals:
-	case times_equals: case div_equals:
-	case and_equals: case or_equals: case xor_equals:
-		return true;
-
-	default:
-		return false;
-	}
-}
-
 statement *parser::expr_std() {
 	expression *lvalue = getexpression(symbols[equals].precedence);
 
-	if (lvalue->type == call_node && !isassignment(current.type)) {
+	if (lvalue->type == call_node) {
 		return new invocation(static_cast<call*>(lvalue));
 	}
 
@@ -171,9 +179,7 @@ statement *parser::expr_std() {
 		token e = current;
 		while (!symbols[current.type].std) advance();
 
-		return error_stmt(unexpected_token_error(
-			e, "assignment operator"
-		));
+		return error_stmt(unexpected_token_error(e, "assignment operator"));
 	}
 
 	token_type op = advance().type;
@@ -374,12 +380,14 @@ symbol_table::symbol_table() {
 	symbols[kw_all].nud = symbols[kw_noone].nud =
 	symbols[kw_global].nud = symbols[kw_local].nud =
 	symbols[kw_true].nud = symbols[kw_false].nud =
-	&parser::id_nud;
+	symbols[name].nud = &parser::id_nud;
 
-	symbols[name].nud = &parser::name_nud;
-	infix(dot, 80, &parser::dot_led);
+	infix(dot, 90, &parser::dot_led);
 
 	prefix(l_paren, &parser::paren_nud);
+
+	infix(l_paren, 80, &parser::paren_led);
+	infix(l_square, 80, &parser::square_led);
 
 	prefix(exclaim);
 	prefix(tilde);

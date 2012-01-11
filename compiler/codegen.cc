@@ -163,10 +163,31 @@ Value *node_codegen::visit_binary(binary *b) {
 
 // todo: {bounds,type,syntax} checking
 Value *node_codegen::visit_subscript(subscript *s) {
-	std::string name(s->array.string.data, s->array.string.length);
+	// todo: should this be in a get_lvalue function?
+	Value *var;
+	switch (s->array->type) {
+	default: return 0;
+
+	case value_node: {
+		value *left = static_cast<value*>(s->array);
+		std::string name(left->t.string.data, left->t.string.length);
+		var = scope[name];
+		break;
+	}
+
+	case binary_node: {
+		binary *left = static_cast<binary*>(s->array);
+		token &name = static_cast<value*>(left->right)->t;
+		var = builder.CreateCall2(
+			lookup, builder.CreateCall(to_real, visit(left->left)),
+			builder.CreateCall(to_string, get_string(name.string.length, name.string.data))
+		);
+		break;
+	}
+	}
 
 	Value *xindices[] = { builder.getInt32(0), builder.getInt32(0) };
-	Value *x16 = builder.CreateLoad(builder.CreateInBoundsGEP(scope[name], xindices));
+	Value *x16 = builder.CreateLoad(builder.CreateInBoundsGEP(var, xindices));
 	Value *x = builder.CreateZExt(x16, builder.getInt32Ty());
 
 	// Value *yindices[] = { builder.getInt32(0), builder.getInt32(1) };
@@ -174,7 +195,7 @@ Value *node_codegen::visit_subscript(subscript *s) {
 	// Value *y = builder.CreateZExt(y16, builder.getInt32Ty());
 
 	Value *aptr[] = { builder.getInt32(0), builder.getInt32(2) };
-	Value *variants = builder.CreateLoad(builder.CreateInBoundsGEP(scope[name], aptr));
+	Value *variants = builder.CreateLoad(builder.CreateInBoundsGEP(var, aptr));
 
 	std::vector<Value*> is;
 	is.reserve(s->indices.size());
@@ -206,7 +227,7 @@ Value *node_codegen::visit_subscript(subscript *s) {
 }
 
 Value *node_codegen::visit_call(call *c) {
-	std::string name(c->function.string.data, c->function.string.length);
+	std::string name(c->function->t.string.data, c->function->t.string.length);
 	Function *function = get_function(name.c_str(), c->args.size());
 
 	std::vector<Value*> args;

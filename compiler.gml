@@ -1,9 +1,9 @@
 /* this is a comment summarizing the script */
 
-var foo, bar_Baz7 qux, x y object_index asdf bar baz something,;;
+var foo, bar_Baz7 qux,;;
 foo = 3 + 2 - +1 * 0 / -(1 div 2) mod (3 + 2)
 bar_Baz7 := foo + self.foo;;;
-(instance_create(x, y, object_index)).asdf = 3
+instance_create(x, y, object_index).asdf = 3
 (100001).asdf[3] = "asdf"
 
 qux[] = foo
@@ -12,7 +12,8 @@ qux[1,2] = baz
 
 self.foo = foo
 global.bar = bar
-baz.qux = qux
+local.qux = qux
+baz.qux = local.qux
 
 if foo = 3 then
 begin

@@ -42,8 +42,8 @@ private:
 
 	expression *infix_led(token t, expression *left);
 	expression *dot_led(token t, expression *left);
-	expression *square_led(token t, token left);
-	expression *paren_led(token t, token left);
+	expression *square_led(token t, expression *left);
+	expression *paren_led(token t, expression *left);
 
 	// statements
 	statement *getstatement();
