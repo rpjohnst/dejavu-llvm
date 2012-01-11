@@ -59,7 +59,7 @@ keyword_table::keyword_table() {
 }
 
 token_stream::token_stream(file_buffer& b) :
-	row(1), col(0), buffer(b), current(b.begin()), buffer_end(b.end()) {
+	row(1), col(1), buffer(b), current(b.begin()), buffer_end(b.end()) {
 }
 
 // todo: potential cleanup/optimization with a switch statement
@@ -152,7 +152,7 @@ void token_stream::skipwhitespace() {
 // if there's no newline, behavior is undefined
 void token_stream::skipnewline() {
 	row += 1;
-	col = 0;
+	col = 1;
 
 	if (*current == '\n' && *(current + 1) == '\r') {
 		current++;
