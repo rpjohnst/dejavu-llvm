@@ -52,7 +52,8 @@ Module &node_codegen::get_module(node *program) {
 		ai->addAttr(Attribute::ByVal);
 	}
 
-	BasicBlock *entry = BasicBlock::Create(context, "entry", function);
+	BasicBlock *entry = BasicBlock::Create(context);
+	function->getBasicBlockList().push_back(entry);
 	builder.SetInsertPoint(entry);
 
 	visit(program);
@@ -105,7 +106,11 @@ Value *node_codegen::visit_unary(unary *u) {
 	Value *result = builder.CreateAlloca(variant_type);
 	Value *operand = builder.CreateAlloca(variant_type);
 	builder.CreateMemCpy(operand, visit(u->right), td->getTypeStoreSize(variant_type), 0);
-	builder.CreateCall2(get_function(name, 1), result, operand);
+
+	CallInst *call = builder.CreateCall2(get_function(name, 1), result, operand);
+	call->addAttribute(1, Attribute::StructRet);
+	call->addAttribute(2, Attribute::ByVal);
+
 	return result;
 }
 
@@ -157,7 +162,12 @@ Value *node_codegen::visit_binary(binary *b) {
 	Value *result = builder.CreateAlloca(variant_type);
 	builder.CreateMemCpy(left, visit(b->left), td->getTypeStoreSize(variant_type), 0);
 	builder.CreateMemCpy(right, visit(b->right), td->getTypeStoreSize(variant_type), 0);
-	builder.CreateCall3(get_function(name, 2), result, left, right);
+
+	CallInst *call = builder.CreateCall3(get_function(name, 2), result, left, right);
+	call->addAttribute(1, Attribute::StructRet);
+	call->addAttribute(2, Attribute::ByVal);
+	call->addAttribute(3, Attribute::ByVal);
+
 	return result;
 }
 
@@ -240,7 +250,12 @@ Value *node_codegen::visit_call(call *c) {
 		args.push_back(arg);
 	}
 
-	builder.CreateCall(function, args);
+	CallInst *call = builder.CreateCall(function, args);
+	call->addAttribute(1, Attribute::StructRet);
+	for (std::vector<Value*>::size_type i = 2; i <= args.size(); i++) {
+		call->addAttribute(i, Attribute::ByVal);
+	}
+
 	return args[0];
 }
 
@@ -580,37 +595,40 @@ Function *node_codegen::get_function(const char *name, int args) {
 
 Value *node_codegen::get_real(double val) {
 	Constant *contents[] = {
-		builder.getInt8(0),
-		ConstantFP::get(builder.getDoubleTy(), val),
+		builder.getInt8(0), ConstantFP::get(builder.getDoubleTy(), val),
 		UndefValue::get(ArrayType::get(builder.getInt8Ty(), union_diff < 0 ? -union_diff : 0))
 	};
 	Constant *variant = ConstantStruct::getAnon(contents);
 	GlobalVariable *global = new GlobalVariable(
 		module, variant->getType(), true, GlobalValue::InternalLinkage, variant, "real"
 	);
+	global->setUnnamedAddr(true);
+
 	return builder.CreateBitCast(global, variant_type->getPointerTo());
 }
 
 Value *node_codegen::get_string(int length, const char *data) {
 	Constant *array = ConstantArray::get(context, StringRef(data, length), false);
 	GlobalVariable *str = new GlobalVariable(
-		module, array->getType(), true, GlobalValue::PrivateLinkage, array, ".str"
+		module, array->getType(), true, GlobalValue::InternalLinkage, array, ".str"
 	);
+	str->setUnnamedAddr(true);
 
 	Value *indices[] = { builder.getInt32(0), builder.getInt32(0) };
 	Constant *string[] = {
 		builder.getInt32(length), cast<Constant>(builder.CreateInBoundsGEP(str, indices))
 	};
-	Constant *val = ConstantStruct::get(string_type, ArrayRef<Constant*>(string));
 
 	Constant *contents[] = {
-		builder.getInt8(1), val,
+		builder.getInt8(1), ConstantStruct::get(string_type, ArrayRef<Constant*>(string)),
 		UndefValue::get(ArrayType::get(builder.getInt8Ty(), union_diff > 0 ? union_diff : 0))
 	};
 	Constant *variant = ConstantStruct::getAnon(contents);
 	GlobalVariable *global = new GlobalVariable(
 		module, variant->getType(), true, GlobalValue::InternalLinkage, variant, "string"
 	);
+	global->setUnnamedAddr(true);
+
 	return builder.CreateBitCast(global, variant_type->getPointerTo());
 }
 
