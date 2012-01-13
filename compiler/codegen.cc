@@ -28,15 +28,16 @@ node_codegen::node_codegen(const TargetData *td) : builder(context), module("", 
 	FunctionType *lookup_type = FunctionType::get(lookup_ret, lookup_args, false);
 	lookup = Function::Create(lookup_type, Function::ExternalLinkage, "lookup", &module);
 
-	FunctionType *to_real_type = FunctionType::get(
-		real_type, variant_type->getPointerTo(), false
-	);
-	to_real = Function::Create(to_real_type, Function::ExternalLinkage, "to_real", &module);
+	Type *index_args[] = { var_type->getPointerTo(), real_type, real_type };
+	Type *index_ret = variant_type->getPointerTo();
+	FunctionType *index_type = FunctionType::get(index_ret, index_args, false);
+	index = Function::Create(index_type, Function::ExternalLinkage, "index", &module);
 
-	FunctionType *to_string_type = FunctionType::get(
-		string_type, variant_type->getPointerTo(), false
-	);
-	to_string = Function::Create(to_string_type, Function::ExternalLinkage, "to_string", &module);
+	FunctionType *to_real_ty = FunctionType::get(real_type, variant_type->getPointerTo(), false);
+	to_real = Function::Create(to_real_ty, Function::ExternalLinkage, "to_real", &module);
+
+	FunctionType *to_str_ty = FunctionType::get(string_type, variant_type->getPointerTo(), false);
+	to_string = Function::Create(to_str_ty, Function::ExternalLinkage, "to_string", &module);
 }
 
 Module &node_codegen::get_module(node *program) {
@@ -179,9 +180,12 @@ Value *node_codegen::visit_subscript(subscript *s) {
 	default: return 0;
 
 	case value_node: {
-		value *left = static_cast<value*>(s->array);
-		std::string name(left->t.string.data, left->t.string.length);
-		var = scope[name];
+		value *v = static_cast<value*>(s->array);
+		std::string name(v->t.string.data, v->t.string.length);
+		var = scope.find(name) != scope.end() ? scope[name] : builder.CreateCall2(
+			lookup, ConstantFP::get(builder.getDoubleTy(), -1),
+			builder.CreateCall(to_string, get_string(v->t.string.length, v->t.string.data))
+		);
 		break;
 	}
 
@@ -196,44 +200,21 @@ Value *node_codegen::visit_subscript(subscript *s) {
 	}
 	}
 
-	Value *xindices[] = { builder.getInt32(0), builder.getInt32(0) };
-	Value *x16 = builder.CreateLoad(builder.CreateInBoundsGEP(var, xindices));
-	Value *x = builder.CreateZExt(x16, builder.getInt32Ty());
-
-	// Value *yindices[] = { builder.getInt32(0), builder.getInt32(1) };
-	// Value *y16 = builder.CreateLoad(builder.CreateInBoundsGEP(scope[name], yindices));
-	// Value *y = builder.CreateZExt(y16, builder.getInt32Ty());
-
-	Value *aptr[] = { builder.getInt32(0), builder.getInt32(2) };
-	Value *variants = builder.CreateLoad(builder.CreateInBoundsGEP(var, aptr));
-
-	std::vector<Value*> is;
-	is.reserve(s->indices.size());
-	for (std::vector<expression*>::iterator it = s->indices.begin(); it != s->indices.end(); ++it) {
-		is.push_back(visit(*it));
+	Value *indices[2];
+	size_t i = 2 - s->indices.size();
+	for (size_t j = 0; j < i; j++) {
+		indices[j] = ConstantFP::get(builder.getDoubleTy(), 0);
+	}
+	for (
+		std::vector<expression*>::iterator it = s->indices.begin();
+		it != s->indices.end();
+		++it, ++i
+	) {
+		Value *index = builder.CreateCall(to_real, visit(*it));
+		indices[i] = index;
 	}
 
-	switch (is.size()) {
-	default: return 0;
-	case 0: {
-		return builder.CreateInBoundsGEP(variants, builder.getInt32(0));
-	}
-	case 1: {
-		Value *real = builder.CreateCall(to_real, is[0]);
-		Value *index = builder.CreateFPToUI(real, builder.getInt32Ty());
-		return builder.CreateInBoundsGEP(variants, index);
-	}
-	case 2: {
-		Value *ireal = builder.CreateCall(to_real, is[0]);
-		Value *i = builder.CreateFPToUI(ireal, builder.getInt32Ty());
-
-		Value *jreal = builder.CreateCall(to_real, is[1]);
-		Value *j = builder.CreateFPToUI(jreal, builder.getInt32Ty());
-
-		Value *index = builder.CreateNSWAdd(builder.CreateNSWMul(i, x), j);
-		return builder.CreateInBoundsGEP(variants, index);
-	}
-	}
+	return builder.CreateCall3(index, var, indices[0], indices[1]);
 }
 
 Value *node_codegen::visit_call(call *c) {

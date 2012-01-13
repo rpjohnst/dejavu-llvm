@@ -59,6 +59,7 @@ private:
 	int union_diff;
 
 	llvm::Function *lookup;
+	llvm::Function *index;
 	llvm::Function *to_real;
 	llvm::Function *to_string;
 
