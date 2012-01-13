@@ -15,7 +15,8 @@ namespace llvm {
 class node_codegen : public node_visitor<node_codegen, llvm::Value*> {
 public:
 	node_codegen(const llvm::TargetData*);
-	llvm::Module &get_module(node*);
+	llvm::Function *add_function(node*, const char *name, size_t nargs);
+	llvm::Module &get_module() { return module; }
 
 	llvm::Value *visit_value(value *v);
 	llvm::Value *visit_unary(unary *u);

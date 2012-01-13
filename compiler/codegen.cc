@@ -40,11 +40,12 @@ node_codegen::node_codegen(const TargetData *td) : builder(context), module("", 
 	to_string = Function::Create(to_str_ty, Function::ExternalLinkage, "to_string", &module);
 }
 
-Module &node_codegen::get_module(node *program) {
-	// todo: refactor this into a function code generator
-	Type *args[] = { variant_type->getPointerTo() };
+// fixme: this can only be called one at a time, not nested for e.g. closures
+// it would have to save args, return_value, scope, insertion point
+Function *node_codegen::add_function(node *body, const char *name, size_t nargs) {
+	std::vector<Type*> args(nargs + 1, variant_type->getPointerTo());
 	FunctionType *type = FunctionType::get(builder.getVoidTy(), args, false);
-	Function *function = Function::Create(type, Function::ExternalLinkage, "main", &module);
+	Function *function = Function::Create(type, Function::ExternalLinkage, name, &module);
 
 	Function::arg_iterator ai = function->arg_begin();
 	ai->addAttr(Attribute::NoAlias | Attribute::StructRet);
@@ -53,15 +54,17 @@ Module &node_codegen::get_module(node *program) {
 		ai->addAttr(Attribute::ByVal);
 	}
 
+	scope.clear();
+
 	BasicBlock *entry = BasicBlock::Create(context);
 	function->getBasicBlockList().push_back(entry);
 	builder.SetInsertPoint(entry);
 
-	visit(program);
+	visit(body);
 
 	builder.CreateRetVoid();
 
-	return module;
+	return function;
 }
 
 Value *node_codegen::visit_value(value *v) {
@@ -254,7 +257,7 @@ Value *node_codegen::visit_invocation(invocation* i) {
 Value *node_codegen::visit_declaration(declaration *d) {
 	for (std::vector<value*>::iterator it = d->names.begin(); it != d->names.end(); ++it) {
 		std::string name((*it)->t.string.data, (*it)->t.string.length);
-		scope[name] = builder.CreateAlloca(var_type, 0);
+		scope[name] = builder.CreateAlloca(var_type);
 	
 		Value *x = builder.getInt16(1), *xindices[] = { builder.getInt32(0), builder.getInt32(0) };
 		Value *xptr = builder.CreateInBoundsGEP(scope[name], xindices);

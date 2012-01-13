@@ -61,10 +61,11 @@ void test_compiler() {
 	const llvm::TargetData *td = machine->getTargetData();
 
 	node_codegen compiler(td);
-	llvm::Module &module = compiler.get_module(program);
+	compiler.add_function(program, "main", 0);
+	llvm::Module &game = compiler.get_module();
 
-	module.dump();
-	verifyModule(module);
+	game.dump();
+	verifyModule(game);
 
 	delete machine;
 	delete program;
