@@ -43,29 +43,43 @@ public:
 
 private:
 	llvm::Function *get_function(const char *name, int args);
+	llvm::Function *get_operator(const char *name, int args);
+
 	llvm::Value *get_real(double val);
 	llvm::Value *get_string(int length, const char *val);
 	llvm::Value *to_bool(node *val);
 	llvm::Value *is_equal(llvm::Value *a, llvm::Value *b);
+
+	llvm::Value *do_lookup(llvm::Value *left, llvm::Value *right);
 
 	llvm::LLVMContext context;
 	llvm::IRBuilder<> builder;
 	llvm::Module module;
 	const llvm::TargetData *td;
 
-	llvm::Type *real_type;
+	// runtime types
+	llvm::PointerType *scope_type;
 	llvm::StructType *var_type;
 	llvm::StructType *variant_type;
+	llvm::Type *real_type;
 	llvm::StructType *string_type;
 	int union_diff;
 
-	llvm::Function *lookup;
-	llvm::Function *index;
+	// runtime functions
 	llvm::Function *to_real;
 	llvm::Function *to_string;
 
+	llvm::Function *lookup;
+	llvm::Function *index;
+
+	llvm::Function *with_begin;
+	llvm::Function *with_inc;
+
+	// scope handling
 	std::map<std::string, llvm::Value*> scope;
-	llvm::Value *return_value;
+	llvm::Value *self_scope = 0;
+	llvm::Value *other_scope = 0;
+	llvm::Value *return_value = 0;
 
 	llvm::BasicBlock *current_loop = 0;
 	llvm::BasicBlock *current_end = 0;

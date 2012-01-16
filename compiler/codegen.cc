@@ -22,8 +22,10 @@ node_codegen::node_codegen(const TargetData *td) : builder(context), module("", 
 	Type *var[] = { dim, dim, contents };
 	var_type = StructType::create(var, "var");
 
+	scope_type = StructType::create(context, "scope")->getPointerTo();
+
 	// todo: move to a separate runtime?
-	Type *lookup_args[] = { real_type, string_type };
+	Type *lookup_args[] = { scope_type, scope_type, real_type, string_type };
 	Type *lookup_ret = var_type->getPointerTo();
 	FunctionType *lookup_type = FunctionType::get(lookup_ret, lookup_args, false);
 	lookup = Function::Create(lookup_type, Function::ExternalLinkage, "lookup", &module);
@@ -38,18 +40,31 @@ node_codegen::node_codegen(const TargetData *td) : builder(context), module("", 
 
 	FunctionType *to_str_ty = FunctionType::get(string_type, variant_type->getPointerTo(), false);
 	to_string = Function::Create(to_str_ty, Function::ExternalLinkage, "to_string", &module);
+
+	// todo: should there be a separate with_iterator type?
+	Type *with_begin_args[] = { scope_type, scope_type, variant_type->getPointerTo() };
+	FunctionType *with_begin_ty = FunctionType::get(scope_type, with_begin_args, false);
+	with_begin = Function::Create(with_begin_ty, Function::ExternalLinkage, "with_begin", &module);
+
+	Type *with_inc_args[] = { scope_type, scope_type, variant_type->getPointerTo(), scope_type };
+	FunctionType *with_inc_ty = FunctionType::get(scope_type, with_inc_args, false);
+	with_inc = Function::Create(with_inc_ty, Function::ExternalLinkage, "with_inc", &module);
 }
 
 // fixme: this can only be called one at a time, not nested for e.g. closures
-// it would have to save args, return_value, scope, insertion point
+// it would have to save args, return_value, {self,other}_scope, insertion point
 Function *node_codegen::add_function(node *body, const char *name, size_t nargs) {
-	std::vector<Type*> args(nargs + 1, variant_type->getPointerTo());
+	std::vector<Type*> args(nargs + 3, variant_type->getPointerTo());
+	args[1] = args[2] = scope_type;
+
 	FunctionType *type = FunctionType::get(builder.getVoidTy(), args, false);
 	Function *function = Function::Create(type, Function::ExternalLinkage, name, &module);
 
 	Function::arg_iterator ai = function->arg_begin();
 	ai->addAttr(Attribute::NoAlias | Attribute::StructRet);
 	return_value = ai;
+	self_scope = ++ai;
+	other_scope = ++ai;
 	for (++ai; ai != function->arg_end(); ++ai) {
 		ai->addAttr(Attribute::ByVal);
 	}
@@ -73,8 +88,8 @@ Value *node_codegen::visit_value(value *v) {
 
 	case name: {
 		std::string name(v->t.string.data, v->t.string.length);
-		Value *var = scope.find(name) != scope.end() ? scope[name] : builder.CreateCall2(
-			lookup, ConstantFP::get(builder.getDoubleTy(), -1),
+		Value *var = scope.find(name) != scope.end() ? scope[name] : do_lookup(
+			ConstantFP::get(builder.getDoubleTy(), -1),
 			builder.CreateCall(to_string, get_string(v->t.string.length, v->t.string.data))
 		);
 		Value *indices[] = { builder.getInt32(0), builder.getInt32(2) };
@@ -111,7 +126,7 @@ Value *node_codegen::visit_unary(unary *u) {
 	Value *operand = builder.CreateAlloca(variant_type);
 	builder.CreateMemCpy(operand, visit(u->right), td->getTypeStoreSize(variant_type), 0);
 
-	CallInst *call = builder.CreateCall2(get_function(name, 1), result, operand);
+	CallInst *call = builder.CreateCall2(get_operator(name, 1), result, operand);
 	call->addAttribute(1, Attribute::StructRet);
 	call->addAttribute(2, Attribute::ByVal);
 
@@ -125,8 +140,8 @@ Value *node_codegen::visit_binary(binary *b) {
 
 	case dot: {
 		token &name = static_cast<value*>(b->right)->t;
-		Value *var = builder.CreateCall2(
-			lookup, builder.CreateCall(to_real, visit(b->left)),
+		Value *var = do_lookup(
+			builder.CreateCall(to_real, visit(b->left)),
 			builder.CreateCall(to_string, get_string(name.string.length, name.string.data))
 		);
 		Value *indices[] = { builder.getInt32(0), builder.getInt32(2) };
@@ -167,7 +182,7 @@ Value *node_codegen::visit_binary(binary *b) {
 	builder.CreateMemCpy(left, visit(b->left), td->getTypeStoreSize(variant_type), 0);
 	builder.CreateMemCpy(right, visit(b->right), td->getTypeStoreSize(variant_type), 0);
 
-	CallInst *call = builder.CreateCall3(get_function(name, 2), result, left, right);
+	CallInst *call = builder.CreateCall3(get_operator(name, 2), result, left, right);
 	call->addAttribute(1, Attribute::StructRet);
 	call->addAttribute(2, Attribute::ByVal);
 	call->addAttribute(3, Attribute::ByVal);
@@ -185,8 +200,8 @@ Value *node_codegen::visit_subscript(subscript *s) {
 	case value_node: {
 		value *v = static_cast<value*>(s->array);
 		std::string name(v->t.string.data, v->t.string.length);
-		var = scope.find(name) != scope.end() ? scope[name] : builder.CreateCall2(
-			lookup, ConstantFP::get(builder.getDoubleTy(), -1),
+		var = scope.find(name) != scope.end() ? scope[name] : do_lookup(
+			ConstantFP::get(builder.getDoubleTy(), -1),
 			builder.CreateCall(to_string, get_string(v->t.string.length, v->t.string.data))
 		);
 		break;
@@ -195,8 +210,8 @@ Value *node_codegen::visit_subscript(subscript *s) {
 	case binary_node: {
 		binary *left = static_cast<binary*>(s->array);
 		token &name = static_cast<value*>(left->right)->t;
-		var = builder.CreateCall2(
-			lookup, builder.CreateCall(to_real, visit(left->left)),
+		var = do_lookup(
+			builder.CreateCall(to_real, visit(left->left)),
 			builder.CreateCall(to_string, get_string(name.string.length, name.string.data))
 		);
 		break;
@@ -225,9 +240,12 @@ Value *node_codegen::visit_call(call *c) {
 	Function *function = get_function(name.c_str(), c->args.size());
 
 	std::vector<Value*> args;
-	args.reserve(c->args.size() + 1);
+	args.reserve(c->args.size() + 3);
 
 	args.push_back(builder.CreateAlloca(variant_type));
+	args.push_back(self_scope);
+	args.push_back(other_scope);
+
 	for (std::vector<expression*>::iterator it = c->args.begin(); it != c->args.end(); ++it) {
 		Value *arg = builder.CreateAlloca(variant_type);
 		builder.CreateMemCpy(arg, visit(*it), td->getTypeStoreSize(variant_type), 0);
@@ -236,7 +254,7 @@ Value *node_codegen::visit_call(call *c) {
 
 	CallInst *call = builder.CreateCall(function, args);
 	call->addAttribute(1, Attribute::StructRet);
-	for (std::vector<Value*>::size_type i = 2; i <= args.size(); i++) {
+	for (std::vector<Value*>::size_type i = 4; i <= args.size(); i++) {
 		call->addAttribute(i, Attribute::ByVal);
 	}
 
@@ -451,6 +469,54 @@ Value *node_codegen::visit_forstatement(forstatement *f) {
 	return 0;
 }
 
+// todo: can this be refactored to reuse the forstatement codegen?
+Value *node_codegen::visit_withstatement(withstatement *w) {
+	Function *fn = builder.GetInsertBlock()->getParent();
+	BasicBlock *loop = BasicBlock::Create(context, "loop");
+	BasicBlock *cond = BasicBlock::Create(context, "cond");
+	BasicBlock *inc = BasicBlock::Create(context, "inc");
+	BasicBlock *after = BasicBlock::Create(context, "after");
+
+	Value *with_expr = visit(w->expr);
+	Value *instance = builder.CreateAlloca(scope_type);
+	Value *init = builder.CreateCall3(with_begin, self_scope, other_scope, with_expr);
+	builder.CreateStore(init, instance);
+	builder.CreateBr(cond);
+
+	fn->getBasicBlockList().push_back(cond);
+	builder.SetInsertPoint(cond);
+	Value *with_end = ConstantPointerNull::get(scope_type);
+	Value *with_cond = builder.CreateICmpNE(builder.CreateLoad(instance), with_end);
+	builder.CreateCondBr(with_cond, loop, after);
+
+	fn->getBasicBlockList().push_back(loop);
+	builder.SetInsertPoint(loop);
+	{
+		save_context<BasicBlock*, BasicBlock*, Value*, Value*> save(
+			current_loop, current_end, self_scope, other_scope
+		);
+		current_loop = inc;
+		current_end = after;
+		other_scope = self_scope;
+		self_scope = builder.CreateLoad(instance);
+		visit(w->stmt);
+	}
+	builder.CreateBr(inc);
+
+	fn->getBasicBlockList().push_back(inc);
+	builder.SetInsertPoint(inc);
+	Value *with_next = builder.CreateCall4(
+		with_inc, self_scope, other_scope, with_expr, builder.CreateLoad(instance)
+	);
+	builder.CreateStore(with_next, instance);
+	builder.CreateBr(cond);
+
+	fn->getBasicBlockList().push_back(after);
+	builder.SetInsertPoint(after);
+
+	return 0;
+}
+
 // todo: switch on a hash rather than generating an if/else chain
 Value *node_codegen::visit_switchstatement(switchstatement *s) {
 	Function *fn = builder.GetInsertBlock()->getParent();
@@ -524,10 +590,6 @@ Value *node_codegen::visit_casestatement(casestatement *c) {
 	return 0;
 }
 
-Value *node_codegen::visit_withstatement(withstatement *w) {
-	return 0;
-}
-
 Value *node_codegen::visit_jump(jump *j) {
 	switch (j->type) {
 	default: return 0;
@@ -561,7 +623,7 @@ Value *node_codegen::visit_returnstatement(returnstatement *r) {
 	return 0;
 }
 
-Function *node_codegen::get_function(const char *name, int args) {
+Function *node_codegen::get_operator(const char *name, int args) {
 	Function *function = module.getFunction(name);
 	if (!function) {
 		std::vector<Type*> vargs(args + 1, variant_type->getPointerTo());
@@ -571,6 +633,23 @@ Function *node_codegen::get_function(const char *name, int args) {
 		Function::arg_iterator ai = function->arg_begin();
 		ai->addAttr(Attribute::NoAlias | Attribute::StructRet);
 		for (++ai; ai != function->arg_end(); ++ai) {
+			ai->addAttr(Attribute::ByVal);
+		}
+	}
+	return function;
+}
+
+Function *node_codegen::get_function(const char *name, int args) {
+	Function *function = module.getFunction(name);
+	if (!function) {
+		std::vector<Type*> vargs(args + 3, variant_type->getPointerTo());
+		vargs[1] = vargs[2] = scope_type;
+		FunctionType *type = FunctionType::get(builder.getVoidTy(), vargs, false);
+		function = Function::Create(type, Function::ExternalLinkage, name, &module);
+
+		Function::arg_iterator ai = function->arg_begin();
+		ai->addAttr(Attribute::NoAlias | Attribute::StructRet);
+		for (++ai, ++ai, ++ai; ai != function->arg_end(); ++ai) {
 			ai->addAttr(Attribute::ByVal);
 		}
 	}
@@ -625,7 +704,11 @@ Value *node_codegen::to_bool(node *cond) {
 
 Value *node_codegen::is_equal(Value *a, Value *b) {
 	Value *res = builder.CreateAlloca(variant_type);
-	builder.CreateCall3(get_function("is_equal", 2), res, a, b);
+	builder.CreateCall3(get_operator("is_equal", 2), res, a, b);
 	Value *expr = builder.CreateCall(to_real, res);
 	return builder.CreateFCmpUGT(expr, ConstantFP::get(builder.getDoubleTy(), 0.5));
+}
+
+Value *node_codegen::do_lookup(Value *left, Value *right) {
+	return builder.CreateCall4(lookup, self_scope, other_scope, left, right);
 }
