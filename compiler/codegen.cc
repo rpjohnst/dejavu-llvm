@@ -69,12 +69,13 @@ Function *node_codegen::add_function(node *body, const char *name, size_t nargs)
 		ai->addAttr(Attribute::ByVal);
 	}
 
-	scope.clear();
-
 	BasicBlock *entry = BasicBlock::Create(context);
+
+	scope.clear();
+	alloca_point = new BitCastInst(builder.getInt32(0), builder.getInt32Ty(), "alloca", entry);
+
 	function->getBasicBlockList().push_back(entry);
 	builder.SetInsertPoint(entry);
-
 	visit(body);
 
 	builder.CreateRetVoid();
@@ -122,8 +123,8 @@ Value *node_codegen::visit_unary(unary *u) {
 	case plus: name = "pos"; break;
 	}
 
-	Value *result = builder.CreateAlloca(variant_type);
-	Value *operand = builder.CreateAlloca(variant_type);
+	Value *result = alloc(variant_type);
+	Value *operand = alloc(variant_type);
 	builder.CreateMemCpy(operand, visit(u->right), td->getTypeStoreSize(variant_type), 0);
 
 	CallInst *call = builder.CreateCall2(get_operator(name, 1), result, operand);
@@ -176,9 +177,9 @@ Value *node_codegen::visit_binary(binary *b) {
 	case kw_mod: name = "mod"; break;
 	}
 
-	Value *left = builder.CreateAlloca(variant_type);
-	Value *right = builder.CreateAlloca(variant_type);
-	Value *result = builder.CreateAlloca(variant_type);
+	Value *left = alloc(variant_type);
+	Value *right = alloc(variant_type);
+	Value *result = alloc(variant_type);
 	builder.CreateMemCpy(left, visit(b->left), td->getTypeStoreSize(variant_type), 0);
 	builder.CreateMemCpy(right, visit(b->right), td->getTypeStoreSize(variant_type), 0);
 
@@ -242,12 +243,12 @@ Value *node_codegen::visit_call(call *c) {
 	std::vector<Value*> args;
 	args.reserve(c->args.size() + 3);
 
-	args.push_back(builder.CreateAlloca(variant_type));
+	args.push_back(alloc(variant_type));
 	args.push_back(self_scope);
 	args.push_back(other_scope);
 
 	for (std::vector<expression*>::iterator it = c->args.begin(); it != c->args.end(); ++it) {
-		Value *arg = builder.CreateAlloca(variant_type);
+		Value *arg = alloc(variant_type);
 		builder.CreateMemCpy(arg, visit(*it), td->getTypeStoreSize(variant_type), 0);
 		args.push_back(arg);
 	}
@@ -275,7 +276,7 @@ Value *node_codegen::visit_invocation(invocation* i) {
 Value *node_codegen::visit_declaration(declaration *d) {
 	for (std::vector<value*>::iterator it = d->names.begin(); it != d->names.end(); ++it) {
 		std::string name((*it)->t.string.data, (*it)->t.string.length);
-		scope[name] = builder.CreateAlloca(var_type);
+		scope[name] = alloc(var_type);
 	
 		Value *x = builder.getInt16(1), *xindices[] = { builder.getInt32(0), builder.getInt32(0) };
 		Value *xptr = builder.CreateInBoundsGEP(scope[name], xindices);
@@ -285,7 +286,7 @@ Value *node_codegen::visit_declaration(declaration *d) {
 		Value *yptr = builder.CreateInBoundsGEP(scope[name], yindices);
 		builder.CreateStore(y, yptr);
 
-		Value *variant = builder.CreateAlloca(variant_type, 0, name);
+		Value *variant = alloc(variant_type, name);
 		Value *vindices[] = { builder.getInt32(0), builder.getInt32(2) };
 		Value *vptr = builder.CreateInBoundsGEP(scope[name], vindices);
 		builder.CreateStore(variant, vptr);
@@ -478,7 +479,7 @@ Value *node_codegen::visit_withstatement(withstatement *w) {
 	BasicBlock *after = BasicBlock::Create(context, "after");
 
 	Value *with_expr = visit(w->expr);
-	Value *instance = builder.CreateAlloca(scope_type);
+	Value *instance = alloc(scope_type);
 	Value *init = builder.CreateCall3(with_begin, self_scope, other_scope, with_expr);
 	builder.CreateStore(init, instance);
 	builder.CreateBr(cond);
@@ -703,10 +704,14 @@ Value *node_codegen::to_bool(node *cond) {
 }
 
 Value *node_codegen::is_equal(Value *a, Value *b) {
-	Value *res = builder.CreateAlloca(variant_type);
+	Value *res = alloc(variant_type);
 	builder.CreateCall3(get_operator("is_equals", 2), res, a, b);
 	Value *expr = builder.CreateCall(to_real, res);
 	return builder.CreateFCmpUGT(expr, ConstantFP::get(builder.getDoubleTy(), 0.5));
+}
+
+AllocaInst *node_codegen::alloc(Type *type, const Twine &name) {
+	return new AllocaInst(type, 0, name, alloca_point);
 }
 
 Value *node_codegen::do_lookup(Value *left, Value *right) {

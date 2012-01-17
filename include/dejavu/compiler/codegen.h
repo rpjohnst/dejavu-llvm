@@ -50,6 +50,7 @@ private:
 	llvm::Value *to_bool(node *val);
 	llvm::Value *is_equal(llvm::Value *a, llvm::Value *b);
 
+	llvm::AllocaInst *alloc(llvm::Type *type, const llvm::Twine &name = "");
 	llvm::Value *do_lookup(llvm::Value *left, llvm::Value *right);
 
 	llvm::LLVMContext context;
@@ -77,6 +78,7 @@ private:
 
 	// scope handling
 	std::map<std::string, llvm::Value*> scope;
+	llvm::Instruction *alloca_point = 0;
 	llvm::Value *self_scope = 0;
 	llvm::Value *other_scope = 0;
 	llvm::Value *return_value = 0;
