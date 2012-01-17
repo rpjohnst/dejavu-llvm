@@ -30,10 +30,10 @@ node_codegen::node_codegen(const TargetData *td) : builder(context), module("", 
 	FunctionType *lookup_type = FunctionType::get(lookup_ret, lookup_args, false);
 	lookup = Function::Create(lookup_type, Function::ExternalLinkage, "lookup", &module);
 
-	Type *index_args[] = { var_type->getPointerTo(), real_type, real_type };
-	Type *index_ret = variant_type->getPointerTo();
-	FunctionType *index_type = FunctionType::get(index_ret, index_args, false);
-	index = Function::Create(index_type, Function::ExternalLinkage, "index", &module);
+	Type *access_args[] = { var_type->getPointerTo(), real_type, real_type };
+	Type *access_ret = variant_type->getPointerTo();
+	FunctionType *access_type = FunctionType::get(access_ret, access_args, false);
+	access = Function::Create(access_type, Function::ExternalLinkage, "access", &module);
 
 	FunctionType *to_real_ty = FunctionType::get(real_type, variant_type->getPointerTo(), false);
 	to_real = Function::Create(to_real_ty, Function::ExternalLinkage, "to_real", &module);
@@ -116,7 +116,7 @@ Value *node_codegen::visit_unary(unary *u) {
 	const char *name;
 	switch (u->op) {
 	default: return 0;
-	case exclaim: name = "not"; break;
+	case exclaim: name = "not_"; break; // get around c
 	case tilde: name = "inv"; break;
 	case minus: name = "neg"; break;
 	case plus: name = "pos"; break;
@@ -162,9 +162,9 @@ Value *node_codegen::visit_binary(binary *b) {
 	case times: name = "times"; break;
 	case divide: name = "divide"; break;
 
-	case ampamp: name = "ampamp"; break;
-	case pipepipe: name = "pipepipe"; break;
-	case caretcaret: name = "caretcaret"; break;
+	case ampamp: name = "log_and"; break;
+	case pipepipe: name = "log_or"; break;
+	case caretcaret: name = "log_xor"; break;
 
 	case bit_and: name = "bit_and"; break;
 	case bit_or: name = "bit_or"; break;
@@ -232,7 +232,7 @@ Value *node_codegen::visit_subscript(subscript *s) {
 		indices[i] = index;
 	}
 
-	return builder.CreateCall3(index, var, indices[0], indices[1]);
+	return builder.CreateCall3(access, var, indices[0], indices[1]);
 }
 
 Value *node_codegen::visit_call(call *c) {
@@ -525,12 +525,12 @@ Value *node_codegen::visit_switchstatement(switchstatement *s) {
 	BasicBlock *after = BasicBlock::Create(context, "after");
 
 	Value *switch_expr = visit(s->expr);
-	Function::BasicBlockListType::iterator switch_cond = builder.GetInsertBlock();
+	Function::iterator switch_cond = builder.GetInsertBlock();
 
 	fn->getBasicBlockList().push_back(dead);
 	builder.SetInsertPoint(dead);
 	{
-		save_context<Value*, BasicBlock*, Function::BasicBlockListType::iterator, BasicBlock*> save(
+		save_context<Value*, BasicBlock*, Function::iterator, BasicBlock*> save(
 			current_switch, current_default, current_cond, current_end
 		);
 		current_switch = switch_expr;
@@ -704,7 +704,7 @@ Value *node_codegen::to_bool(node *cond) {
 
 Value *node_codegen::is_equal(Value *a, Value *b) {
 	Value *res = builder.CreateAlloca(variant_type);
-	builder.CreateCall3(get_operator("is_equal", 2), res, a, b);
+	builder.CreateCall3(get_operator("is_equals", 2), res, a, b);
 	Value *expr = builder.CreateCall(to_real, res);
 	return builder.CreateFCmpUGT(expr, ConstantFP::get(builder.getDoubleTy(), 0.5));
 }

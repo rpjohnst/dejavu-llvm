@@ -70,7 +70,7 @@ private:
 	llvm::Function *to_string;
 
 	llvm::Function *lookup;
-	llvm::Function *index;
+	llvm::Function *access;
 
 	llvm::Function *with_begin;
 	llvm::Function *with_inc;
@@ -84,7 +84,7 @@ private:
 	llvm::BasicBlock *current_loop = 0;
 	llvm::BasicBlock *current_end = 0;
 
-	llvm::Function::BasicBlockListType::iterator current_cond = 0;
+	llvm::Function::iterator current_cond = 0;
 	llvm::BasicBlock *current_default = 0;
 	llvm::Value *current_switch = 0;
 };
