@@ -1,3 +1,5 @@
 *.[od]
+*.class
 *.bc
-gmlc
+*.so
+*.jar

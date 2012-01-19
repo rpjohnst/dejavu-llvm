@@ -37,9 +37,6 @@ bool isoperator(char c) {
 bool isdigit(char c) {
 	return '0' <= c && c <= '9';
 }
-bool ishexdigit(char c) {
-	return isdigit(c) || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F');
-}
 
 struct keyword_table : public std::map<std::string, token_type> {
 	keyword_table();
