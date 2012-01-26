@@ -1,15 +1,18 @@
-#include <jni.h>
+#include "driver.h"
+#include "dejavu/linker/game.h"
 
-extern "C"
-JNIEXPORT void JNICALL Java_org_dejavu_Driver_compile(
-	JNIEnv *env, jclass Driver, jobject target, jboolean debug, jobject progress
-) {
-	jclass ProgressPane = env->GetObjectClass(progress);
-	jmethodID append = env->GetMethodID(ProgressPane, "append", "(Ljava/lang/String;)V");
-	jmethodID percent = env->GetMethodID(ProgressPane, "percent", "(I)V");
-	jmethodID message = env->GetMethodID(ProgressPane, "message", "(Ljava/lang/String;)V");
+#include <cstdio>
+#include <sstream>
 
-	env->CallVoidMethod(progress, append, env->NewStringUTF("hello\n"));
-	env->CallVoidMethod(progress, percent, 50);
-	env->CallVoidMethod(progress, message, env->NewStringUTF("processing"));
+void compile(const char *target, game &source, build_log &log) {
+	log.append(static_cast<std::ostringstream&>(
+		std::ostringstream()
+			<< "building " << source.name << " (" << source.version << ") to " << target << "\n"
+	).str().c_str());
+
+	for (int i = 0; i < source.nscripts; i++) {
+		log.append(static_cast<std::ostringstream&>(
+			std::ostringstream() << source.scripts[i].name << "\n"
+		).str().c_str());
+	}
 }

@@ -1,3 +1,0 @@
-LGM-Plugin: org.dejavu.Runner
-Class-Path: ../lgm16b4.jar
-

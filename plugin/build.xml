@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="dejavu" default="jar">
+	<property name="jarname" value="dejavu.jar"/>
+	<property name="jar" value="${basedir}/../${jarname}"/>
+
+	<target name="jar" depends="compile" description="Builds the plugin jar">
+		<jar destfile="${jar}" basedir=".">
+			<manifest>
+				<attribute name="LGM-Plugin" value="org.dejavu.Runner"/>
+			</manifest>
+
+			<exclude name="**/*.java"/>
+			<exclude name="**/build.xml"/>
+			<exclude name="**/*.i"/>
+			<exclude name="**/*.cc"/>
+			<exclude name="**/*.h"/>
+			<exclude name="**/*.o"/>
+			<exclude name="**/*.d"/>
+			<exclude name="**/.*.sw?"/>
+		</jar>
+	</target>
+
+	<target name="compile">
+		<javac
+			source="1.6" target="1.6" includeantruntime="no"
+			sourcepath="${basedir}"
+			classpath="../../LateralGM/lgm16b4.jar"
+			srcdir="${basedir}"
+		/>
+	</target>
+
+	<target name="clean">
+		<delete verbose="true">
+			<fileset dir="${basedir}" includes="**/*.class"/>
+		</delete>
+		<delete file="${jar}"/>
+	</target>
+</project>

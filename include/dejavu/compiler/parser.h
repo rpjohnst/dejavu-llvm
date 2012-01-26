@@ -3,26 +3,11 @@
 
 #include "dejavu/compiler/lexer.h"
 #include "dejavu/compiler/node.h"
+#include "dejavu/compiler/error_stream.h"
 #include <exception>
 #include <vector>
 #include <map>
 #include <algorithm>
-
-struct unexpected_token_error {
-	unexpected_token_error(token unexpected, const char *expected) :
-		unexpected(unexpected), expected(expected) {}
-
-	unexpected_token_error(token unexpected, token_type exp) :
-		unexpected(unexpected), expected_token(exp) {}
-
-	token unexpected;
-	const char *expected;
-	token_type expected_token;
-};
-
-struct error_stream {
-	virtual void push_back(const unexpected_token_error&) = 0;
-};
 
 class parser {
 	friend class symbol_table;

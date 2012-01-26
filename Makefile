@@ -1,45 +1,47 @@
 # top-level commands
 
+TARGETS := dejavu.jar dejavu.so runtime.bc
+
 .PHONY: all
-all: dejavu.jar dejavu.so runtime.bc
+all: $(TARGETS)
 
 .PHONY: clean
 clean:
-	$(RM) dejavu.jar $(plugin_OBJECTS) dejavu.so $(library_OBJECTS) $(library_DEPENDS) runtime.bc $(runtime_OBJECTS) $(runtime_DEPENDS)
+	$(RM) $(TARGETS) $(interface_OBJECTS) $(interface_DEPENDS) $(library_OBJECTS) $(library_DEPENDS) $(runtime_OBJECTS) $(runtime_DEPENDS)
+	(cd plugin && ant clean)
 
 # toolchain configuration
 
 CXX := clang++
 CXXFLAGS := -Wall -Wextra -g
 
-JAVAC := javac
+# build the interface
 
-JAR := jar
+interface_SOURCES := $(wildcard plugin/*.i)
+interface_OBJECTS := $(wildcard plugin/*_wrap.*) $(wildcard plugin/org/dejavu/backend/*.java)
+interface_DEPENDS := $(interface_SOURCES:.i=.d)
 
-DEPFLAGS = -MMD -MP -MT $@
+%_wrap.cc: %.i | plugin/org/dejavu/backend
+	swig -Wall -MMD -MF $*.d -O -Iinclude -c++ -java -package org.dejavu.backend -outdir plugin/org/dejavu/backend -o $@ $<
+
+plugin/org/dejavu/backend:
+	mkdir $@
 
 # build the plugin
 
 plugin_SOURCES := $(shell find plugin -name '*.java')
-plugin_OBJECTS := $(plugin_SOURCES:.java=.class)
-plugin_FILES := plugin/org/dejavu/icons.properties # todo: automate this
 
-plugin_JFLAGS := -sourcepath plugin -classpath ../LateralGM/lgm16b4.jar
-
-dejavu.jar: $(plugin_OBJECTS) $(plugin_FILES) plugin/META-INF/MANIFEST.MF
-	$(JAR) cmf plugin/META-INF/MANIFEST.MF $@ $(^:plugin/%=-C plugin %)
-
-%.class: %.java
-	$(JAVAC) $(plugin_JFLAGS) $<
+dejavu.jar: $(plugin_SOURCES) plugin/dejavu_wrap.cc
+	cd plugin && ant
 
 # build the library
 
-library_SOURCES := $(shell find compiler system plugin -name '*.cc')
+library_SOURCES := $(shell find compiler linker system plugin -name '*.cc') plugin/dejavu_wrap.cc
 library_OBJECTS := $(library_SOURCES:.cc=.o)
 library_DEPENDS := $(library_SOURCES:.cc=.d)
 
 library_CXXFLAGS := -fpic
-library_CPPFLAGS := $(shell llvm-config --cppflags) -I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/linux
+library_CPPFLAGS := $(shell llvm-config --cppflags) -I$(JAVA_HOME)/include{,/linux}
 library_LDFLAGS := -shared $(shell llvm-config --ldflags)
 library_LDLIBS := $(shell llvm-config --libs core native scalaropts ipo linker bitwriter)
 
@@ -47,7 +49,7 @@ dejavu.so: $(library_OBJECTS)
 	$(CXX) $(library_LDFLAGS) -o $@ $^ $(library_LDLIBS)
 
 %.o: %.cc
-	$(CXX) -c -std=c++11 -Iinclude $(DEPFLAGS) $(CXXFLAGS) $(library_CXXFLAGS) $(library_CPPFLAGS) -o $@ $<
+	$(CXX) -c -std=c++11 -Iinclude -MMD -MP $(CXXFLAGS) $(library_CXXFLAGS) $(library_CPPFLAGS) -o $@ $<
 
 # build the runtime
 
@@ -64,5 +66,5 @@ runtime.bc: $(runtime_OBJECTS)
 # include dependencies
 
 ifeq ($(filter clean, $(MAKECMDGOALS)),)
--include $(library_DEPENDS) $(runtime_DEPENDS)
+-include $(interface_DEPENDS) $(library_DEPENDS) $(runtime_DEPENDS)
 endif

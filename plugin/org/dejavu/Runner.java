@@ -1,6 +1,9 @@
 package org.dejavu;
 
+import org.dejavu.backend.*;
 import org.lateralgm.main.LGM;
+import org.lateralgm.file.*;
+import org.lateralgm.resources.*;
 import org.lateralgm.components.GmTreeGraphics;
 import java.awt.event.*;
 import java.awt.*;
@@ -63,12 +66,40 @@ public class Runner implements ActionListener {
 		LGM.tool.add(debugButton, 7);
 	}
 
+	private void build(File target) {
+		progress.reset();
+
+		progress.message("writing game data");
+
+		LGM.commitAll();
+		GmFile file = LGM.currentFile;
+
+		game source = new game();
+		source.setVersion(file.format != null ? file.format.getVersion() : -1);
+		source.setName(file.uri != null ? file.uri.toString() : "<untitled>");
+
+		ResourceList<Script> scripts = file.resMap.getList(Script.class);
+		scriptArray out = new scriptArray(scripts.size());
+		int i = 0;
+		for (Script script : scripts) {
+			script s = new script();
+			s.setId(script.getId());
+			s.setName(script.getName());
+			s.setCode(script.getCode());
+			out.setitem(i, s);
+			i++;
+		}
+		source.setNscripts(scripts.size());
+		source.setScripts(out.cast());
+
+		dejavu.compile(target.getPath(), source, progress.new Log());
+	}
+
 	private void compile() {
 		JFileChooser save = new JFileChooser();
 		if (save.showSaveDialog(LGM.frame) != JFileChooser.APPROVE_OPTION) return;
 
-		progress.reset();
-		Driver.compile(save.getSelectedFile(), progress);
+		build(save.getSelectedFile());
 	}
 
 	private void run() {
@@ -81,8 +112,7 @@ public class Runner implements ActionListener {
 			return;
 		}
 
-		progress.reset();
-		Driver.compile(target, progress);
+		build(target);
 
 		progress.append("run " + target.getPath() + "\n");
 	}
@@ -97,8 +127,7 @@ public class Runner implements ActionListener {
 			return;
 		}
 
-		progress.reset();
-		Driver.compile(target, true, progress);
+		build(target);
 
 		progress.append("debug " + target.getPath() + "\n");
 	}

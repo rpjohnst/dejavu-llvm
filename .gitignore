@@ -1,5 +1,7 @@
 *.[od]
 *.class
+*_wrap.*
+plugin/org/dejavu/backend
 *.bc
 *.so
 *.jar
