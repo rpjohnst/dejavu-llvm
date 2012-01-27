@@ -26,7 +26,6 @@ public class ProgressPane extends JPanel {
 	}
 
 	public void reset() {
-		clear();
 		percent(0);
 		message(null);
 	}

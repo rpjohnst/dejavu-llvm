@@ -20,6 +20,7 @@ struct unexpected_token_error {
 
 struct error_stream {
 	virtual void push_back(const unexpected_token_error&) = 0;
+	virtual void push_back(const std::string &) = 0;
 };
 
 #endif

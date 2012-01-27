@@ -4,12 +4,14 @@
 #include <cstddef>
 #include <stdexcept>
 
-class file_buffer;
+class buffer;
 
 enum token_type {
 #define TOK(X) X,
 #include "dejavu/compiler/tokens.tbl"
 };
+
+std::ostream &operator <<(std::ostream &o, token_type t);
 
 struct token {
 	token() {}
@@ -27,9 +29,11 @@ struct token {
 	};
 };
 
+std::ostream &operator <<(std::ostream &o, const token &t);
+
 class token_stream {
 public:
-	token_stream(file_buffer& b);
+	token_stream(buffer &b);
 	token gettoken();
 
 private:
@@ -43,7 +47,7 @@ private:
 
 	size_t row, col;
 
-	file_buffer& buffer;
+	buffer &source;
 	const char *current, *buffer_end;
 };
 

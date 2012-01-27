@@ -1,7 +1,6 @@
 #ifndef DRIVER_H
 #define DRIVER_H
 
-#include "dejavu/linker/build.h"
 struct game;
 
 // impure-virtual to appease Java

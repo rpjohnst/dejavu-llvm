@@ -11,7 +11,7 @@ struct game {
 	int version;
 	char *name;
 
-	int nscripts;
+	unsigned int nscripts;
 	script *scripts;
 };
 

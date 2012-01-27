@@ -1,11 +1,12 @@
 #include "dejavu/system/file.h"
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <cerrno>
 
-int file_buffer::open_file(const char *path, int flags) {
-	int fd = open(path, flags);
+int file_buffer::open_file(const char *path) {
+	int fd = open(path, O_RDONLY);
 	if (fd == -1)
 		return errno;
 
@@ -16,8 +17,8 @@ int file_buffer::open_file(const char *path, int flags) {
 	}
 	length = s.st_size;
 
-	buffer = static_cast<char*>(mmap(NULL, length, PROT_READ, MAP_PRIVATE, fd, 0));
-	if (buffer == MAP_FAILED) {
+	data = static_cast<char*>(mmap(NULL, length, PROT_READ, MAP_PRIVATE, fd, 0));
+	if (data == MAP_FAILED) {
 		close(fd);
 		return errno;
 	}
@@ -27,5 +28,5 @@ int file_buffer::open_file(const char *path, int flags) {
 }
 
 file_buffer::~file_buffer() {
-	munmap(buffer, length);
+	munmap(data, length);
 }

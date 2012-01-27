@@ -1,5 +1,5 @@
 #include "dejavu/compiler/lexer.h"
-#include "dejavu/system/file.h"
+#include "dejavu/system/buffer.h"
 #include <cstdlib>
 #include <map>
 #include <sstream>
@@ -55,8 +55,8 @@ keyword_table::keyword_table() {
 
 }
 
-token_stream::token_stream(file_buffer& b) :
-	row(1), col(1), buffer(b), current(b.begin()), buffer_end(b.end()) {
+token_stream::token_stream(buffer &b) :
+	row(1), col(1), source(b), current(b.begin()), buffer_end(b.end()) {
 }
 
 // todo: potential cleanup/optimization with a switch statement
@@ -308,4 +308,27 @@ token token_stream::getstring() {
 	current++;
 
 	return t;
+}
+
+std::ostream &operator <<(std::ostream &o, token_type t) {
+	switch (t) {
+#	define KEYWORD(X) case kw_ ## X: return o << #X;
+#	define OPERATOR(X, Y) case X: return o << Y;
+#	include "dejavu/compiler/tokens.tbl"
+	default: return o;
+	}
+}
+
+std::ostream &operator <<(std::ostream &o, const token& t) {
+	switch (t.type) {
+	case real: return o << t.real;
+	case unexpected: case name: return o.write(t.string.data, t.string.length);
+	case string: o << '"'; o.write(t.string.data, t.string.length); return o << '"';
+
+#	define KEYWORD(X) case kw_ ## X: return o << #X;
+#	define OPERATOR(X, Y) case X: return o << Y;
+#	include "dejavu/compiler/tokens.tbl"
+
+	default: return o;
+	}
 }
