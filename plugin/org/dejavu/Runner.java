@@ -65,12 +65,18 @@ public class Runner implements ActionListener {
 	}
 
 	private void build(final File target) {
-		progress.reset();
-
 		new Thread() { public void run() {
+			progress.reset();
 			progress.message("writing game data");
 			LGM.commitAll();
 			game source = new Writer(LGM.currentFile, progress).write();
+
+			progress.percent(10);
+			progress.message("building game");
+			progress.append(
+				"building " + source.getName() + " (" + source.getVersion() + ")" +
+				" to " + target.getPath() + "\n"
+			);
 			dejavu.compile(target.getPath(), source, progress.new Log());
 		} }.start();
 	}

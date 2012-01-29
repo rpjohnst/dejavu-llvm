@@ -9,6 +9,10 @@
 
 %include "carrays.i"
 %array_class(script, scriptArray);
+%array_class(object, objectArray);
+%array_class(event, eventArray);
+%array_class(action, actionArray);
+%array_class(argument, argArray);
 
 %include "dejavu/linker/game.h"
 %include "driver.h"

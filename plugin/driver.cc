@@ -1,5 +1,5 @@
 #include "driver.h"
-#include "dejavu/linker/build.h"
+#include "dejavu/linker/linker.h"
 #include "dejavu/linker/game.h"
 #include "dejavu/compiler/error_stream.h"
 
@@ -31,12 +31,6 @@ private:
 };
 
 void compile(const char *target, game &source, build_log &log) {
-	log.percent(10);
-	log.append(static_cast<std::ostringstream&>(
-		std::ostringstream()
-			<< "building " << source.name << " (" << source.version << ") to " << target << "\n"
-	).str().c_str());
-
 	error_printer errors(log);
 	build(target, source, errors);
 }
