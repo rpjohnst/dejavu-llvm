@@ -28,5 +28,5 @@ int file_buffer::open_file(const char *path) {
 }
 
 file_buffer::~file_buffer() {
-	munmap(data, length);
+	munmap(const_cast<char*>(data), length);
 }

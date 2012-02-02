@@ -6,7 +6,7 @@
 
 class buffer {
 public:
-	buffer(size_t len, char *data) : length(len), data(data) {}
+	buffer(size_t len, const char *data) : length(len), data(data) {}
 
 	const char &operator[](size_t i) const {
 		assert(i < length && "index out of range");
@@ -18,7 +18,7 @@ public:
 
 protected:
 	size_t length;
-	char *data;
+	const char *data;
 };
 
 #endif

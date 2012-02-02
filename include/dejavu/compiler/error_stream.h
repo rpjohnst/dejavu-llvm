@@ -19,8 +19,12 @@ struct unexpected_token_error {
 // todo: linker errors
 
 struct error_stream {
+	virtual void set_context(const std::string &) = 0;
+
 	virtual void push_back(const unexpected_token_error&) = 0;
 	virtual void push_back(const std::string &) = 0;
+
+	virtual int count() = 0;
 };
 
 #endif
