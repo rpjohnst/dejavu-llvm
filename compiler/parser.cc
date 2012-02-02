@@ -103,6 +103,8 @@ expression *parser::infix_led(token t, expression *left) {
 
 expression *parser::dot_led(token t, expression *left) {
 	token n = advance(name);
+	if (n.type != name) return new expression_error;
+
 	return new binary(t.type, left, (this->*symbols[n.type].nud)(n));
 }
 
@@ -178,7 +180,6 @@ statement *parser::expr_std() {
 	if (!isassignment(current.type)) {
 		token e = current;
 		while (!symbols[current.type].std) advance();
-
 		return error_stmt(unexpected_token_error(e, "assignment operator"));
 	}
 
@@ -195,6 +196,8 @@ statement *parser::var_std() {
 	std::vector<value*> names;
 	while (current.type != semicolon && current.type != eof) {
 		token n = advance(name);
+		if (n.type != name) return new declaration(t, names);
+
 		names.push_back((value*)(this->*symbols[n.type].nud)(n));
 
 		if (current.type == comma) {
@@ -349,8 +352,7 @@ token parser::advance(token_type t) {
 	if (n.type != t) {
 		// skip to (I hope) the beginning of the next statement
 		while (!symbols[current.type].std) advance();
-
-		delete error_stmt(unexpected_token_error(n, t));
+		errors.push_back(unexpected_token_error(n, t));
 	}
 	return n;
 }
@@ -445,4 +447,7 @@ symbol_table::symbol_table() {
 	symbols[kw_return].std = &parser::return_std;
 	symbols[kw_case].std = symbols[kw_default].std =
 	&parser::case_std;
+
+	symbols[eof].std = &parser::null_std;
+	symbols[eof].nud = &parser::null_nud;
 }

@@ -72,7 +72,7 @@ token token_stream::gettoken() {
 		// single-line comment
 		if (*(current + 1) == '/') {
 			current++;
-			while (!isnewline(*++current))
+			while (current != buffer_end && !isnewline(*++current))
 				continue;
 		}
 		// multi-line comment
@@ -131,7 +131,7 @@ token token_stream::gettoken() {
 
 // skips any whitespace at the current position
 void token_stream::skipwhitespace() {
-	for (; isspace(*current); current++) {
+	for (; current != buffer_end && isspace(*current); current++) {
 		if (*current == '\t') {
 			col += 4;
 		}
@@ -151,7 +151,7 @@ void token_stream::skipnewline() {
 	row += 1;
 	col = 1;
 
-	if (*current == '\n' && *(current + 1) == '\r') {
+	if (*current == '\r' && *(current + 1) == '\n') {
 		current++;
 	}
 }
@@ -291,21 +291,25 @@ token token_stream::getnumber() {
 
 // returns the string literal at the current position
 // GML makes this easy without escape sequences but we'll want them later
+// todo: error on unterminated strings
 token token_stream::getstring() {
 	token t(string, row, col);
+
 	char delim = *current++;
+	col += 1;
+
 	t.string.data = current;
-
-	do {
-		current++;
-
-		col += 1;
+	while (current != buffer_end && *current != delim) {
 		if (isnewline(*current))
 			skipnewline();
-	} while (*current != delim);
+
+		current++;
+		col += 1;
+	}
 	t.string.length = current - t.string.data;
 
 	current++;
+	col += 1;
 
 	return t;
 }

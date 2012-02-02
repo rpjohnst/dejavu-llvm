@@ -25,6 +25,8 @@ private:
 	expression *prefix_nud(token t);
 	expression *paren_nud(token t);
 
+	expression *null_nud(token t) { return error_expr(unexpected_token_error(t, "expression")); }
+
 	expression *infix_led(token t, expression *left);
 	expression *dot_led(token t, expression *left);
 	expression *square_led(token t, expression *left);
@@ -48,6 +50,8 @@ private:
 	statement *jump_std();
 	statement *return_std();
 	statement *case_std();
+
+	statement *null_std() { return error_stmt(unexpected_token_error(current, "statement")); }
 
 	// utilities
 	token advance();

@@ -26,7 +26,7 @@ void print_token(const token& t) {
 #	define OPERATOR(X, Y) case X: printf(Y); break;
 #	include "dejavu/compiler/tokens.tbl"
 
-	default: ; // do nothing
+	default: /* do nothing */;
 	}
 }
 
