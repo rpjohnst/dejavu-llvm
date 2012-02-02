@@ -65,6 +65,8 @@ Function *node_codegen::add_function(node *body, const char *name, size_t nargs)
 	return_value = ai;
 	self_scope = ++ai;
 	other_scope = ++ai;
+
+	// todo: argument#, argument[#], argument_relative
 	for (++ai; ai != function->arg_end(); ++ai) {
 		ai->addAttr(Attribute::ByVal);
 	}

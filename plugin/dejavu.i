@@ -8,11 +8,24 @@
 %feature("director") build_log;
 
 %include "carrays.i"
-%array_class(script, scriptArray);
-%array_class(object, objectArray);
-%array_class(event, eventArray);
-%array_class(action, actionArray);
-%array_class(argument, argArray);
+
+%define %array_move(type, array)
+%typemap(javacode) array %{
+	public type move() {
+		swigCMemOwn = false;
+		return cast();
+	}
+%}
+
+%array_class(type, array);
+%enddef
+
+%array_move(script, scriptArray);
+%array_move(object, objectArray);
+%array_move(event, eventArray);
+%array_move(action_type, actionTypeArray);
+%array_move(action, actionArray);
+%array_move(argument, argArray);
 
 %include "dejavu/linker/game.h"
 %include "driver.h"

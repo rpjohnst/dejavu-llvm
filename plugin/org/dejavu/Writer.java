@@ -62,7 +62,7 @@ public class Writer {
 			}
 		}
 		out.setNactions(actionCount);
-		out.setActions(actionsOut.cast());
+		out.setActions(actionsOut.move());
 	}
 
 	private void writeScripts() {
@@ -81,7 +81,7 @@ public class Writer {
 		}
 
 		out.setNscripts(scripts.size());
-		out.setScripts(scriptsOut.cast());
+		out.setScripts(scriptsOut.move());
 	}
 
 	private void writeObjects() {
@@ -109,7 +109,7 @@ public class Writer {
 			i++;
 		}
 		out.setNobjects(objects.size());
-		out.setObjects(objectsOut.cast());
+		out.setObjects(objectsOut.move());
 	}
 
 	private void writeEvents(GmObject obj, object out) {
@@ -133,7 +133,7 @@ public class Writer {
 			}
 		}
 		out.setNevents(eventCount);
-		out.setEvents(eventsOut.cast());
+		out.setEvents(eventsOut.move());
 	}
 
 	private void writeActions(Event evt, event out) {
@@ -158,7 +158,7 @@ public class Writer {
 			i++;
 		}
 		out.setNactions(evt.actions.size());
-		out.setActions(actionsOut.cast());
+		out.setActions(actionsOut.move());
 	}
 
 	private void writeArguments(Action act, action out) {
@@ -174,7 +174,7 @@ public class Writer {
 			i++;
 		}
 		out.setNargs(act.getArguments().size());
-		out.setArgs(argsOut.cast());
+		out.setArgs(argsOut.move());
 	}
 
 	private static int toId(Object obj, int def) {
