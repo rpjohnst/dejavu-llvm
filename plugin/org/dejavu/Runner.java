@@ -64,32 +64,35 @@ public class Runner implements ActionListener {
 		LGM.tool.add(debugButton, 7);
 	}
 
-	private void build(final File target) {
-		new Thread() { public void run() {
-			progress.reset();
-			progress.message("writing game data");
-			LGM.commitAll();
-			game source = new Writer(LGM.currentFile, progress).write();
+	private synchronized void build(File target) {
+		progress.reset();
+		progress.message("writing game data");
+		LGM.commitAll();
+		game source = new Writer(LGM.currentFile, progress).write();
 
-			progress.percent(10);
-			progress.message("building game");
-			progress.append(
-				"building " + source.getName() + " (" + source.getVersion() + ")" +
-				" to " + target.getPath() + "\n"
-			);
-			dejavu.compile(target.getPath(), source, progress.new Log());
-		} }.start();
+		progress.percent(10);
+		progress.message("building game");
+		progress.append(
+			"building " + source.getName() + " (" + source.getVersion() + ")" +
+			" to " + target.getPath() + "\n"
+		);
+		dejavu.compile(target.getPath(), source, progress.new Log());
+
+		progress.percent(100);
+		progress.message("finished");
 	}
 
 	private void compile() {
-		JFileChooser save = new JFileChooser();
+		final JFileChooser save = new JFileChooser();
 		if (save.showSaveDialog(LGM.frame) != JFileChooser.APPROVE_OPTION) return;
 
-		build(save.getSelectedFile());
+		new Thread() { public void run() {
+			build(save.getSelectedFile());
+		} }.start();
 	}
 
 	private void run() {
-		File target;
+		final File target;
 		try {
 			target = File.createTempFile("djv", "");
 		}
@@ -98,13 +101,14 @@ public class Runner implements ActionListener {
 			return;
 		}
 
-		build(target);
-
-		progress.append("run " + target.getPath() + "\n");
+		new Thread() { public void run() {
+			build(target);
+			progress.append("run " + target.getPath() + "\n");
+		} }.start();
 	}
 
 	private void debug() {
-		File target;
+		final File target;
 		try {
 			target = File.createTempFile("djv", "");
 		}
@@ -113,9 +117,10 @@ public class Runner implements ActionListener {
 			return;
 		}
 
-		build(target);
-
-		progress.append("debug " + target.getPath() + "\n");
+		new Thread() { public void run() {
+			build(target);
+			progress.append("debug " + target.getPath() + "\n");
+		} }.start();
 	}
 
 	public void actionPerformed(ActionEvent event) {
