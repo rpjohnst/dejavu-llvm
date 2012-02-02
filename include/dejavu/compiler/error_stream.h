@@ -11,10 +11,11 @@ struct unexpected_token_error {
 		unexpected(unexpected), expected_token(exp) {}
 
 	token unexpected;
-	const char *expected;
-	token_type expected_token;
+	const char *expected = 0;
+	token_type expected_token = ::unexpected;
 };
 
+// todo: lexer errors
 // todo: codegen errors
 // todo: linker errors
 
