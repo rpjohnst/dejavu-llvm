@@ -30,24 +30,18 @@ public class Runner implements ActionListener, LGM.ReloadListener {
 		main.setRightComponent(split);
 		main.setDividerLocation(200);
 
-		// menus
-		JMenu fileMenu = LGM.frame.getJMenuBar().getMenu(0);
-		fileMenu.add(new JSeparator(), 4);
-
-		compileItem = new JMenuItem("Create Executable");
-		compileItem.addActionListener(this);
-		fileMenu.add(compileItem, 5);
-
+		// menu
 		JMenu runMenu = new JMenu("Run");
 
-		runItem = new JMenuItem("Run");
+		compileItem = createMenuItem("Toolbar.COMPILE", "Create Executable");
+		runMenu.add(compileItem);
+
+		runItem = createMenuItem("Toolbar.RUN", "Run");
 		runItem.setAccelerator(KeyStroke.getKeyStroke(116, 0));
-		runItem.addActionListener(this);
 		runMenu.add(runItem);
 
-		debugItem = new JMenuItem("Debug");
+		debugItem = createMenuItem("Toolbar.DEBUG", "Debug");
 		debugItem.setAccelerator(KeyStroke.getKeyStroke(117, 0));
-		debugItem.addActionListener(this);
 		runMenu.add(debugItem);
 
 		LGM.frame.getJMenuBar().add(runMenu, 3);
@@ -66,6 +60,45 @@ public class Runner implements ActionListener, LGM.ReloadListener {
 
 		// ui hooks
 		LGM.addReloadListener(this);
+	}
+
+	private JMenuItem createMenuItem(String key, String title) {
+		JMenuItem item = new JMenuItem(title);
+		Icon icon = getIconForKey(key);
+		item.setIcon(icon != null ? icon : GmTreeGraphics.getBlankIcon());
+		item.addActionListener(this);
+		return item;
+	}
+
+	private JButton createButton(String key, String tooltip) {
+		JButton button = new JButton();
+		Icon icon = getIconForKey(key);
+		button.setIcon(icon != null ? icon : GmTreeGraphics.getBlankIcon());
+		button.setToolTipText(tooltip);
+		button.addActionListener(this);
+		return button;
+	}
+
+	private static Icon getIconForKey(String key) {
+		Properties icons = new Properties();
+		InputStream is = Runner.class.getClassLoader().getResourceAsStream(
+			"org/dejavu/icons.properties"
+		);
+
+		try {
+			icons.load(is);
+		}
+		catch (IOException e) {
+			System.err.println("Unable to read icons.properties");
+		}
+
+		String name = icons.getProperty(key, "");
+		if (name.isEmpty()) return null;
+
+		URL url = Runner.class.getClassLoader().getResource("org/dejavu/icons/" + name);
+		if (url == null) return null;
+
+		return new ImageIcon(url);
 	}
 
 	private synchronized boolean build(File target) {
@@ -147,36 +180,5 @@ public class Runner implements ActionListener, LGM.ReloadListener {
 	public void reloadPerformed(boolean newRoot) {
 		progress.reset();
 		progress.clear();
-	}
-
-	private JButton createButton(String key, String tooltip) {
-		JButton button = new JButton();
-		Icon icon = getIconForKey(key);
-		button.setIcon(icon != null ? icon : GmTreeGraphics.getBlankIcon());
-		button.setToolTipText(tooltip);
-		button.addActionListener(this);
-		return button;
-	}
-
-	private static Icon getIconForKey(String key) {
-		Properties icons = new Properties();
-		InputStream is = Runner.class.getClassLoader().getResourceAsStream(
-				"org/dejavu/icons.properties"
-				);
-
-		try {
-			icons.load(is);
-		}
-		catch (IOException e) {
-			System.err.println("Unable to read icons.properties");
-		}
-
-		String name = icons.getProperty(key, "");
-		if (name.isEmpty()) return null;
-
-		URL url = Runner.class.getClassLoader().getResource("org/dejavu/icons/" + name);
-		if (url == null) return null;
-
-		return new ImageIcon(url);
 	}
 }
