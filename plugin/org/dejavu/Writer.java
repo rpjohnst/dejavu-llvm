@@ -9,6 +9,7 @@ import org.lateralgm.resources.sub.*;
 import org.lateralgm.resources.library.*;
 import static org.lateralgm.main.Util.deRef;
 import java.util.List;
+import java.util.HashMap;
 
 public class Writer {
 	private GmFile file;
@@ -21,9 +22,12 @@ public class Writer {
 		log = l;
 	}
 
+	// todo: use JNI directly to avoid all this excessive copying
 	public game write() {
 		out.setVersion(file.format != null ? file.format.getVersion() : -1);
 		out.setName(file.uri != null ? file.uri.toString() : "<untitled>");
+
+		writeLibraries();
 
 		writeScripts();
 		writeObjects();
@@ -31,18 +35,51 @@ public class Writer {
 		return out;
 	}
 
+	// todo: do this on-demand, eventually keep libs compiled on installation
+	private HashMap<LibAction, action_type> actionTypes = new HashMap<LibAction, action_type>();
+	private void writeLibraries() {
+		int actionCount = 0;
+		for (Library lib : LibManager.libs) {
+			actionCount += lib.libActions.size();
+		}
+
+		actionTypeArray actionsOut = new actionTypeArray(actionCount);
+		int i = 0;
+		for (Library lib : LibManager.libs) {
+			for (LibAction act : lib.libActions) {
+				action_type a = new action_type();
+				a.setId(act.id);
+				a.setParent(act.parentId);
+				a.setKind(act.actionKind);
+				a.setQuestion(act.question);
+				a.setRelative(act.allowRelative);
+				a.setExec(act.execType);
+				a.setCode(act.execInfo);
+
+				actionsOut.setitem(i, a);
+				actionTypes.put(act, a);
+				i++;
+			}
+		}
+		out.setNactions(actionCount);
+		out.setActions(actionsOut.cast());
+	}
+
 	private void writeScripts() {
 		ResourceList<Script> scripts = file.resMap.getList(Script.class);
 		scriptArray scriptsOut = new scriptArray(scripts.size());
 		int i = 0;
+
 		for (Script scr : scripts) {
 			script s = new script();
 			s.setId(scr.getId());
 			s.setName(scr.getName());
 			s.setCode(scr.getCode());
+
 			scriptsOut.setitem(i, s);
 			i++;
 		}
+
 		out.setNscripts(scripts.size());
 		out.setScripts(scriptsOut.cast());
 	}
@@ -80,6 +117,7 @@ public class Writer {
 		for (MainEvent me : obj.mainEvents) {
 			eventCount += me.events.size();
 		}
+
 		eventArray eventsOut = new eventArray(eventCount);
 		int i = 0;
 		for (int mid = 0; mid < obj.mainEvents.size(); mid++) {
@@ -102,18 +140,17 @@ public class Writer {
 		actionArray actionsOut = new actionArray(evt.actions.size());
 		int i = 0;
 		for (Action act : evt.actions) {
-			LibAction lact = act.getLibAction();
-			if (lact == null) {
+			LibAction type = act.getLibAction();
+			if (type == null) {
 				log.append("unsupported action: " + act.toString() + "\n");
 				continue;
 			}
 
 			action a = new action();
+			a.setType(actionTypes.get(type));
 			a.setRelative(act.isRelative());
 			a.setInv(act.isNot());
-			a.setQuestion(lact.question);
 			a.setTarget(GmObject.refAsInt(act.getAppliesTo()));
-			a.setKind(lact.actionKind);
 
 			writeArguments(act, a);
 
@@ -131,6 +168,7 @@ public class Writer {
 			argument a = new argument();
 			a.setKind(arg.kind);
 			a.setVal(arg.getVal());
+			a.setResource(toId(arg.getRes(), -1));
 
 			argsOut.setitem(i, a);
 			i++;
