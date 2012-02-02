@@ -10,7 +10,7 @@ import java.net.*;
 import java.io.*;
 import java.util.*;
 
-public class Runner implements ActionListener {
+public class Runner implements ActionListener, LGM.ReloadListener {
 	private JMenuItem compileItem, runItem, debugItem;
 	private JButton compileButton, runButton, debugButton;
 
@@ -19,6 +19,7 @@ public class Runner implements ActionListener {
 	public Runner() {
 		LGM.mdi.setBackground(Color.LIGHT_GRAY);
 
+		// progress pane
 		progress = new ProgressPane();
 		progress.setMinimumSize(new Dimension(0, 150));
 
@@ -62,9 +63,12 @@ public class Runner implements ActionListener {
 
 		debugButton = createButton("Toolbar.DEBUG", "Run the game in debug mode");
 		LGM.tool.add(debugButton, 7);
+
+		// ui hooks
+		LGM.addReloadListener(this);
 	}
 
-	private synchronized void build(File target) {
+	private synchronized boolean build(File target) {
 		progress.reset();
 		progress.message("writing game data");
 		LGM.commitAll();
@@ -76,10 +80,18 @@ public class Runner implements ActionListener {
 			"building " + source.getName() + " (" + source.getVersion() + ")" +
 			" to " + target.getPath() + "\n"
 		);
-		dejavu.compile(target.getPath(), source, progress.new Log());
+		boolean success = dejavu.compile(target.getPath(), source, progress.new Log());
 
-		progress.percent(100);
-		progress.message("finished");
+		if (success) {
+			progress.percent(100);
+			progress.message("finished");
+		}
+		else {
+			progress.percent(0);
+			progress.message("failed");
+		}
+
+		return success;
 	}
 
 	private void compile() {
@@ -102,8 +114,8 @@ public class Runner implements ActionListener {
 		}
 
 		new Thread() { public void run() {
-			build(target);
-			progress.append("run " + target.getPath() + "\n");
+			boolean success = build(target);
+			if (success) progress.append("run " + target.getPath() + "\n");
 		} }.start();
 	}
 
@@ -118,16 +130,23 @@ public class Runner implements ActionListener {
 		}
 
 		new Thread() { public void run() {
-			build(target);
-			progress.append("debug " + target.getPath() + "\n");
+			boolean success = build(target);
+			if (success) progress.append("debug " + target.getPath() + "\n");
 		} }.start();
 	}
 
+	@Override
 	public void actionPerformed(ActionEvent event) {
 		Object source = event.getSource();
 		if (source == compileItem || source == compileButton) compile();
 		if (source == runItem || source == runButton) run();
 		if (source == debugItem || source == debugButton) debug();
+	}
+
+	@Override
+	public void reloadPerformed(boolean newRoot) {
+		progress.reset();
+		progress.clear();
 	}
 
 	private JButton createButton(String key, String tooltip) {

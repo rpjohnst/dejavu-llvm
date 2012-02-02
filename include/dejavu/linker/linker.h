@@ -13,7 +13,7 @@ namespace llvm {
 class linker {
 public:
 	linker(game&, const std::string &triple, error_stream&);
-	void build(const char *target);
+	bool build(const char *target);
 
 private:
 	void build_libraries();

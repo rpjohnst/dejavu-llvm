@@ -352,18 +352,18 @@ token parser::advance(token_type t) {
 	if (n.type != t) {
 		// skip to (I hope) the beginning of the next statement
 		while (!symbols[current.type].std) advance();
-		errors.push_back(unexpected_token_error(n, t));
+		errors.error(unexpected_token_error(n, t));
 	}
 	return n;
 }
 
 statement_error *parser::error_stmt(const unexpected_token_error &e) {
-	errors.push_back(e);
+	errors.error(e);
 	return new statement_error;
 }
 
 expression_error *parser::error_expr(const unexpected_token_error &e) {
-	errors.push_back(e);
+	errors.error(e);
 	return new expression_error;
 }
 

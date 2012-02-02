@@ -21,11 +21,12 @@ struct unexpected_token_error {
 
 struct error_stream {
 	virtual void set_context(const std::string &) = 0;
-
-	virtual void push_back(const unexpected_token_error&) = 0;
-	virtual void push_back(const std::string &) = 0;
-
 	virtual int count() = 0;
+
+	virtual void error(const unexpected_token_error&) = 0;
+	virtual void error(const std::string &) = 0;
+
+	virtual void progress(int i, const std::string &) = 0;
 };
 
 #endif

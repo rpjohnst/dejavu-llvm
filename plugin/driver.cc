@@ -14,12 +14,10 @@ class error_printer : public error_stream {
 public:
 	error_printer(build_log &log) : log(log) {}
 
-	void set_context(const std::string &c) {
-		context = c;
-		errors = 0;
-	}
+	void set_context(const std::string &c) { context = c; }
+	int count() { return errors; }
 
-	void push_back(const unexpected_token_error &e) {
+	void error(const unexpected_token_error &e) {
 		std::ostringstream s;
 		s	<< context << ":" << e.unexpected.row << ":" << e.unexpected.col << ": "
 			<< "error: unexpected '" << e.unexpected << "'; expected ";
@@ -31,12 +29,15 @@ public:
 		errors++;
 	}
 
-	void push_back(const std::string &e) {
+	void error(const std::string &e) {
 		log.append(e.c_str());
 		errors++;
 	}
 
-	int count() { return errors; }
+	void progress(int i, const std::string &n = "") {
+		log.percent(i);
+		if (!n.empty()) log.message(n.c_str());
+	}
 
 private:
 	build_log &log;
@@ -47,9 +48,9 @@ private:
 
 llvm::llvm_shutdown_obj y;
 
-void compile(const char *target, game &source, build_log &log) {
+bool compile(const char *target, game &source, build_log &log) {
 	error_printer errors(log);
 
 	llvm::InitializeNativeTarget();
-	linker(source, llvm::sys::getHostTriple(), errors).build(target);
+	return linker(source, llvm::sys::getHostTriple(), errors).build(target);
 }

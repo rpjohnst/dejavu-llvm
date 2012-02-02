@@ -37,12 +37,19 @@ const TargetData *get_target(const std::string &triple) {
 linker::linker(game &g, const std::string &triple, error_stream &e) :
 	source(g), errors(e), td(get_target(triple)), compiler(td) {}
 
-void linker::build(const char *target) {
+bool linker::build(const char *target) {
+	errors.progress(20, "compiling libraries");
 	build_libraries();
 
+	errors.progress(30, "compiling scripts");
 	build_scripts();
+
+	errors.progress(40, "compiling objects");
 	build_objects();
 
+	if (errors.count() > 0) return false;
+
+	errors.progress(60, "linking runtime");
 	Module &game = compiler.get_module();
 
 	Linker linker("", "", game.getContext());
@@ -51,6 +58,7 @@ void linker::build(const char *target) {
 	linker.LinkInFile(sys::Path("runtime.bc"), is_native);
 	Module *module = linker.getModule();
 
+	errors.progress(80, "optimizing game");
 	PassManager pm;
 	pm.add(new TargetData(*td));
 
@@ -67,13 +75,15 @@ void linker::build(const char *target) {
 		new tool_output_file(target, error_info, raw_fd_ostream::F_Binary)
 	);
 	if (!error_info.empty()) {
-		errors.push_back(error_info);
-		return;
+		errors.error(error_info);
+		return false;
 	}
 
 	pm.add(createBitcodeWriterPass(out->os()));
 	pm.run(*module);
 	out->keep();
+
+	return errors.count() == 0;
 }
 
 void linker::build_libraries() {
