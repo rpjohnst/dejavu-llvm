@@ -3,6 +3,7 @@ package org.dejavu;
 import org.dejavu.backend.*;
 import org.lateralgm.main.LGM;
 import org.lateralgm.components.GmTreeGraphics;
+import org.lateralgm.components.impl.CustomFileFilter;
 import java.awt.event.*;
 import java.awt.*;
 import javax.swing.*;
@@ -128,11 +129,18 @@ public class Runner implements ActionListener, LGM.ReloadListener {
 	}
 
 	private void compile() {
-		final JFileChooser save = new JFileChooser();
+		String ext = ""; // todo: this is based on platform
+
+		JFileChooser save = new JFileChooser();
+		save.setFileFilter(new CustomFileFilter(ext, "Executable files"));
 		if (save.showSaveDialog(LGM.frame) != JFileChooser.APPROVE_OPTION) return;
 
+		File file = save.getSelectedFile();
+		if (!file.getName().endsWith(ext)) file = new File(file.getPath() + ext);
+
+		final File target = file;
 		new Thread() { public void run() {
-			build(save.getSelectedFile());
+			build(target);
 		} }.start();
 	}
 
