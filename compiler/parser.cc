@@ -15,8 +15,8 @@ bool isassignment(token_type t) {
 
 symbol_table symbols;
 
-parser::parser(token_stream& l, error_stream& e) :
-	lexer(l), current(lexer.gettoken()), errors(e) {}
+parser::parser(token_stream& l, arena &allocator, error_stream& e) :
+	lexer(l), current(lexer.gettoken()), allocator(allocator), errors(e) {}
 
 node *parser::getprogram() {
 	statement *stmt;
@@ -29,7 +29,7 @@ node *parser::getprogram() {
 			stmts.push_back(getstatement());
 		}
 
-		stmt = new block(stmts);
+		stmt = new (allocator) block(stmts);
 	}
 
 	advance(eof);
@@ -81,11 +81,11 @@ expression *parser::getexpression(int prec) {
 }
 
 expression *parser::id_nud(token t) {
-	return new value(t);
+	return new (allocator) value(t);
 }
 
 expression *parser::prefix_nud(token t) {
-	return new unary(t.type, getexpression(70));
+	return new (allocator) unary(t.type, getexpression(70));
 }
 
 expression *parser::paren_nud(token) {
@@ -96,16 +96,16 @@ expression *parser::paren_nud(token) {
 
 expression *parser::infix_led(token t, expression *left) {
 	token_type type = t.type == equals ? is_equals : t.type;
-	return new binary(
+	return new (allocator) binary(
 		type, left, getexpression(symbols[t.type].precedence)
 	);
 }
 
 expression *parser::dot_led(token t, expression *left) {
 	token n = advance(name);
-	if (n.type != name) return new expression_error;
+	if (n.type != name) return new (allocator) expression_error;
 
-	return new binary(t.type, left, (this->*symbols[n.type].nud)(n));
+	return new (allocator) binary(t.type, left, (this->*symbols[n.type].nud)(n));
 }
 
 expression *parser::square_led(token, expression *left) {
@@ -131,7 +131,7 @@ expression *parser::square_led(token, expression *left) {
 
 	advance();
 
-	return new subscript(left, indices);
+	return new (allocator) subscript(left, indices);
 }
 
 expression *parser::paren_led(token, expression *left) {
@@ -149,7 +149,7 @@ expression *parser::paren_led(token, expression *left) {
 
 	advance(r_paren); // or expected comma
 
-	return new call(static_cast<value*>(left), args);
+	return new (allocator) call(static_cast<value*>(left), args);
 }
 
 statement *parser::getstatement() {
@@ -174,7 +174,7 @@ statement *parser::expr_std() {
 	expression *lvalue = getexpression(symbols[equals].precedence);
 
 	if (lvalue->type == call_node) {
-		return new invocation(static_cast<call*>(lvalue));
+		return new (allocator) invocation(static_cast<call*>(lvalue));
 	}
 
 	if (!isassignment(current.type)) {
@@ -187,7 +187,7 @@ statement *parser::expr_std() {
 
 	expression *rvalue = getexpression();
 
-	return new assignment(op, lvalue, rvalue);
+	return new (allocator) assignment(op, lvalue, rvalue);
 }
 
 statement *parser::var_std() {
@@ -196,7 +196,7 @@ statement *parser::var_std() {
 	std::vector<value*> names;
 	while (current.type != semicolon && current.type != eof) {
 		token n = advance(name);
-		if (n.type != name) return new declaration(t, names);
+		if (n.type != name) return new (allocator) declaration(t, names);
 
 		names.push_back((value*)(this->*symbols[n.type].nud)(n));
 
@@ -207,7 +207,7 @@ statement *parser::var_std() {
 
 	advance(semicolon);
 
-	return new declaration(t, names);
+	return new (allocator) declaration(t, names);
 }
 
 statement *parser::brace_std() {
@@ -220,7 +220,7 @@ statement *parser::brace_std() {
 
 	advance(r_brace);
 
-	return new block(stmts);
+	return new (allocator) block(stmts);
 }
 
 statement *parser::if_std() {
@@ -238,7 +238,7 @@ statement *parser::if_std() {
 		branch_false = getstatement();
 	}
 
-	return new ifstatement(cond, branch_true, branch_false);
+	return new (allocator) ifstatement(cond, branch_true, branch_false);
 }
 
 statement *parser::while_std() {
@@ -250,7 +250,7 @@ statement *parser::while_std() {
 	}
 	statement *stmt = getstatement();
 
-	return new whilestatement(cond, stmt);
+	return new (allocator) whilestatement(cond, stmt);
 }
 
 statement *parser::do_std() {
@@ -261,14 +261,14 @@ statement *parser::do_std() {
 
 	expression *cond = getexpression();
 
-	return new dostatement(cond, stmt);
+	return new (allocator) dostatement(cond, stmt);
 }
 
 statement *parser::repeat_std() {
 	advance();
 	expression *count = getexpression();
 	statement *stmt = getstatement();
-	return new repeatstatement(count, stmt);
+	return new (allocator) repeatstatement(count, stmt);
 }
 
 statement *parser::for_std() {
@@ -289,7 +289,7 @@ statement *parser::for_std() {
 
 	statement *stmt = getstatement();
 
-	return new forstatement(init, cond, inc, stmt);
+	return new (allocator) forstatement(init, cond, inc, stmt);
 }
 
 statement *parser::switch_std() {
@@ -301,7 +301,7 @@ statement *parser::switch_std() {
 	}
 	block *stmts = static_cast<block*>(brace_std());
 
-	return new switchstatement(expr, stmts);
+	return new (allocator) switchstatement(expr, stmts);
 }
 
 statement *parser::with_std() {
@@ -313,11 +313,11 @@ statement *parser::with_std() {
 	}
 	statement *stmt = getstatement();
 
-	return new withstatement(expr, stmt);
+	return new (allocator) withstatement(expr, stmt);
 }
 
 statement *parser::jump_std() {
-	return new jump(advance().type);
+	return new (allocator) jump(advance().type);
 }
 
 statement *parser::return_std() {
@@ -325,7 +325,7 @@ statement *parser::return_std() {
 
 	expression *expr = getexpression();
 
-	return new returnstatement(expr);
+	return new (allocator) returnstatement(expr);
 }
 
 statement *parser::case_std() {
@@ -338,7 +338,7 @@ statement *parser::case_std() {
 
 	advance(colon);
 
-	return new casestatement(expr);
+	return new (allocator) casestatement(expr);
 }
 
 token parser::advance() {
@@ -359,12 +359,12 @@ token parser::advance(token_type t) {
 
 statement_error *parser::error_stmt(const unexpected_token_error &e) {
 	errors.error(e);
-	return new statement_error;
+	return new (allocator) statement_error;
 }
 
 expression_error *parser::error_expr(const unexpected_token_error &e) {
 	errors.error(e);
-	return new expression_error;
+	return new (allocator) expression_error;
 }
 
 void symbol_table::prefix(token_type t, nud_parser nud) {

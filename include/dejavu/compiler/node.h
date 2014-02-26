@@ -2,9 +2,7 @@
 #define NODE_H
 
 #include <vector>
-#include <algorithm>
 #include "dejavu/compiler/lexer.h"
-#include "dejavu/stl_helpers.h"
 
 enum node_type {
 #define NODE(X) X ## _node,
@@ -13,7 +11,6 @@ enum node_type {
 
 struct node {
 	explicit node(node_type type) : type(type) {}
-	virtual ~node() {}
 
 	node_type type;
 };
@@ -34,7 +31,6 @@ struct value : public expression {
 struct unary : public expression {
 	unary(token_type op, expression *right) :
 		expression(unary_node), op(op), right(right) {}
-	~unary() { delete right; }
 
 	token_type op;
 	expression *right;
@@ -44,7 +40,6 @@ struct unary : public expression {
 struct binary : public expression {
 	binary(token_type op, expression *left, expression *right) :
 		expression(binary_node), op(op), left(left), right(right) {}
-	~binary() { delete left; delete right; }
 
 	token_type op;
 	expression *left, *right;
@@ -53,9 +48,6 @@ struct binary : public expression {
 struct subscript : public expression {
 	subscript(expression *array, std::vector<expression*>& indices) :
 		expression(subscript_node), array(array), indices(indices) {}
-	~subscript() {
-		std::for_each(indices.begin(), indices.end(), deleter<expression>);
-	}
 
 	expression *array;
 	std::vector<expression*> indices;
@@ -64,9 +56,6 @@ struct subscript : public expression {
 struct call : public expression {
 	call(value *function, std::vector<expression*>& args) :
 		expression(call_node), function(function), args(args) {}
-	~call() {
-		std::for_each(args.begin(), args.end(), deleter<expression>);
-	}
 
 	value *function;
 	std::vector<expression*> args;
@@ -83,7 +72,6 @@ struct statement_error : public statement {
 struct assignment : public statement {
 	assignment(token_type op, expression *lvalue, expression *rvalue) :
 		statement(assignment_node), op(op), lvalue(lvalue), rvalue(rvalue) {}
-	~assignment() { delete lvalue; delete rvalue; }
 
 	token_type op;
 	expression *lvalue, *rvalue;
@@ -91,7 +79,6 @@ struct assignment : public statement {
 
 struct invocation : public statement {
 	invocation(call *c) : statement(invocation_node), c(c) {}
-	~invocation() { delete c; }
 
 	call *c;
 };
@@ -99,9 +86,6 @@ struct invocation : public statement {
 struct declaration : public statement {
 	declaration(token type, std::vector<value*>& names) :
 		statement(declaration_node), type(type), names(names) {}
-	~declaration() {
-		std::for_each(names.begin(), names.end(), deleter<value>);
-	}
 
 	token type;
 	std::vector<value*> names;
@@ -110,9 +94,6 @@ struct declaration : public statement {
 struct block : public statement {
 	block(std::vector<statement*>& stmts) :
 		statement(block_node), stmts(stmts) {}
-	~block() {
-		std::for_each(stmts.begin(), stmts.end(), deleter<statement>);
-	}
 
 	std::vector<statement*> stmts;
 };
@@ -127,9 +108,6 @@ struct ifstatement : public statement {
 		cond(cond),
 		branch_true(branch_true),
 		branch_false(branch_false) {}
-	~ifstatement() {
-		delete cond; delete branch_true; delete branch_false;
-	}
 
 	expression *cond;
 	statement *branch_true, *branch_false;
@@ -138,7 +116,6 @@ struct ifstatement : public statement {
 struct whilestatement : public statement {
 	whilestatement(expression *cond, statement *stmt) :
 		statement(whilestatement_node), cond(cond), stmt(stmt) {}
-	~whilestatement() { delete cond; delete stmt; }
 
 	expression *cond;
 	statement *stmt;
@@ -147,7 +124,6 @@ struct whilestatement : public statement {
 struct dostatement : public statement {
 	dostatement(expression *cond, statement *stmt) :
 		statement(dostatement_node), cond(cond), stmt(stmt) {}
-	~dostatement() { delete cond; delete stmt; }
 
 	expression *cond;
 	statement *stmt;
@@ -156,7 +132,6 @@ struct dostatement : public statement {
 struct repeatstatement : public statement {
 	repeatstatement(expression *expr, statement *stmt) :
 		statement(repeatstatement_node), expr(expr), stmt(stmt) {}
-	~repeatstatement() { delete expr; delete stmt; }
 
 	expression *expr;
 	statement *stmt;
@@ -174,9 +149,6 @@ struct forstatement : public statement {
 		cond(cond),
 		inc(inc),
 		stmt(stmt) {}
-	~forstatement() {
-		delete init; delete cond; delete inc; delete stmt;
-	}
 
 	statement *init;
 	expression *cond;
@@ -187,7 +159,6 @@ struct forstatement : public statement {
 struct switchstatement : public statement {
 	switchstatement(expression *expr, block *stmts) :
 		statement(switchstatement_node), expr(expr), stmts(stmts) {}
-	~switchstatement() { delete expr; delete stmts; }
 
 	expression *expr;
 	block *stmts;
@@ -196,7 +167,6 @@ struct switchstatement : public statement {
 struct withstatement : public statement {
 	withstatement(expression *expr, statement *stmt) :
 		statement(withstatement_node), expr(expr), stmt(stmt) {}
-	~withstatement() { delete expr; delete stmt; }
 
 	expression *expr;
 	statement *stmt;
@@ -211,7 +181,6 @@ struct jump : public statement {
 struct returnstatement : public statement {
 	returnstatement(expression *expr) :
 		statement(returnstatement_node), expr(expr) {}
-	~returnstatement() { delete expr; }
 
 	expression *expr;
 };
@@ -219,7 +188,6 @@ struct returnstatement : public statement {
 struct casestatement : public statement {
 	casestatement(expression *expr) :
 		statement(casestatement_node), expr(expr) {}
-	~casestatement() { delete expr; }
 
 	expression *expr;
 };

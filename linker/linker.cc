@@ -38,7 +38,7 @@ const DataLayout *get_layout(const std::string &triple) {
 }
 
 linker::linker(game &g, const std::string &triple, error_stream &e) :
-	source(g), errors(e), dl(get_layout(triple)), compiler(dl) {}
+	source(g), errors(e), dl(get_layout(triple)), compiler(dl, errors) {}
 
 bool linker::build(const char *target) {
 	errors.progress(20, "compiling libraries");
@@ -236,11 +236,13 @@ std::ostream &operator <<(std::ostream &out, const argument &arg) {
 void linker::add_function(size_t length, const char *data, const std::string &name, int args) {
 	buffer code(length, data);
 	token_stream tokens(code);
-	parser parser(tokens, errors);
+
+	arena allocator;
+	parser parser(tokens, allocator, errors);
 	errors.set_context(name);
 
-	std::unique_ptr<node> program(parser.getprogram());
+	node *program = parser.getprogram();
 	if (errors.count() > 0) return;
 
-	compiler.add_function(program.get(), name.c_str(), args);
+	compiler.add_function(program, name.c_str(), args, var);
 }

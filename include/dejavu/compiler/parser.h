@@ -1,9 +1,10 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-#include "dejavu/compiler/lexer.h"
-#include "dejavu/compiler/node.h"
-#include "dejavu/compiler/error_stream.h"
+#include <dejavu/compiler/lexer.h>
+#include <dejavu/compiler/node.h>
+#include <dejavu/system/arena.h>
+#include <dejavu/compiler/error_stream.h>
 #include <exception>
 #include <vector>
 #include <map>
@@ -13,7 +14,7 @@ class parser {
 	friend class symbol_table;
 
 public:
-	parser(token_stream& l, error_stream& e);
+	parser(token_stream& l, arena &allocator, error_stream& e);
 	node *getprogram();
 
 private:
@@ -63,6 +64,7 @@ private:
 	token_stream& lexer;
 	token current;
 
+	arena &allocator;
 	error_stream& errors;
 };
 
