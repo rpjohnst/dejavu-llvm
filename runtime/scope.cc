@@ -2,7 +2,18 @@
 #include "dejavu/runtime/error.h"
 #include <unordered_map>
 
-struct scope : public std::unordered_map<string, var> { };
+struct string_hash {
+public:
+	size_t operator()(const string &s) const {
+		size_t result = 2166136261;
+		for (size_t i = 0; i < s.length; i++) {
+			result = (result * 16777619) ^ s.data[i];
+		}
+		return result;
+	}
+};
+
+struct scope : public std::unordered_map<string, var, string_hash> {};
 
 static scope global;
 

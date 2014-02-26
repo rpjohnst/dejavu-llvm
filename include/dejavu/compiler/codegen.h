@@ -2,19 +2,19 @@
 #define CODEGEN_H
 
 #include "dejavu/compiler/node_visitor.h"
-#include "llvm/LLVMContext.h"
-#include "llvm/Support/IRBuilder.h"
-#include "llvm/Module.h"
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Module.h>
 #include <map>
 #include <string>
 
 namespace llvm {
-	class TargetData;
+	class DataLayout;
 }
 
 class node_codegen : public node_visitor<node_codegen, llvm::Value*> {
 public:
-	node_codegen(const llvm::TargetData*);
+	node_codegen(const llvm::DataLayout*);
 	llvm::Function *add_function(node*, const char *name, size_t nargs);
 	llvm::Module &get_module() { return module; }
 
@@ -56,7 +56,7 @@ private:
 	llvm::LLVMContext context;
 	llvm::IRBuilder<> builder;
 	llvm::Module module;
-	const llvm::TargetData *td;
+	const llvm::DataLayout *dl;
 
 	// runtime types
 	llvm::PointerType *scope_type;

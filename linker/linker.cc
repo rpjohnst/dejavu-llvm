@@ -6,36 +6,39 @@
 #include "dejavu/compiler/codegen.h"
 #include "dejavu/system/buffer.h"
 
-#include "llvm/PassManager.h"
-#include "llvm/Analysis/Passes.h"
-#include "llvm/Analysis/Verifier.h"
-#include "llvm/Transforms/Scalar.h"
-#include "llvm/Transforms/IPO.h"
-#include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#include <llvm/PassManager.h>
+#include <llvm/Analysis/Passes.h>
+#include <llvm/Analysis/Verifier.h>
+#include <llvm/Transforms/Scalar.h>
+#include <llvm/Transforms/IPO.h>
+#include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
-#include "llvm/Linker.h"
-#include "llvm/Support/Path.h"
-#include "llvm/Bitcode/ReaderWriter.h"
+#include <llvm/Linker.h>
+#include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Bitcode/ReaderWriter.h>
 
-#include "llvm/Support/TargetRegistry.h"
-#include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetData.h"
+#include <llvm/Support/TargetRegistry.h>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/IR/DataLayout.h>
 
-#include "llvm/Support/ToolOutputFile.h"
+#include <llvm/Support/ToolOutputFile.h>
 
 #include <sstream>
+#include <algorithm>
 
 using namespace llvm;
 
-const TargetData *get_target(const std::string &triple) {
+const DataLayout *get_layout(const std::string &triple) {
 	std::string error;
 	const Target *target = TargetRegistry::lookupTarget(triple, error);
-	TargetMachine *machine = target->createTargetMachine(triple, "", "");
-	return machine->getTargetData();
+	TargetMachine *machine = target->createTargetMachine(
+		triple, "", "", TargetOptions()
+	);
+	return machine->getDataLayout();
 }
 
 linker::linker(game &g, const std::string &triple, error_stream &e) :
-	source(g), errors(e), td(get_target(triple)), compiler(td) {}
+	source(g), errors(e), dl(get_layout(triple)), compiler(dl) {}
 
 bool linker::build(const char *target) {
 	errors.progress(20, "compiling libraries");
@@ -51,36 +54,35 @@ bool linker::build(const char *target) {
 
 	errors.progress(60, "linking runtime");
 	Module &game = compiler.get_module();
-
-	Linker linker("", "", game.getContext());
-	linker.LinkInModule(&game);
-	bool is_native;
-	linker.LinkInFile(sys::Path("runtime.bc"), is_native);
-	Module *module = linker.getModule();
+	{
+		OwningPtr<MemoryBuffer> rt;
+		MemoryBuffer::getFile("runtime.bc", rt);
+		Module *runtime = ParseBitcodeFile(rt.get(), game.getContext());
+		Linker::LinkModules(&game, runtime, Linker::DestroySource, NULL);
+	}
 
 	errors.progress(80, "optimizing game");
+
 	PassManager pm;
-	pm.add(new TargetData(*td));
+	pm.add(new DataLayout(*dl));
+	pm.add(createVerifierPass());
 
 	PassManagerBuilder pmb;
 	pmb.OptLevel = 3;
-	pmb.Inliner = createFunctionInliningPass(275);
 	pmb.populateModulePassManager(pm);
 	pmb.populateLTOPassManager(pm, true, true);
 
-	pm.add(createVerifierPass());
-
 	std::string error_info;
 	std::unique_ptr<tool_output_file> out(
-		new tool_output_file(target, error_info, raw_fd_ostream::F_Binary)
+		new tool_output_file(target, error_info, sys::fs::F_Binary)
 	);
 	if (!error_info.empty()) {
 		errors.error(error_info);
 		return false;
 	}
-
 	pm.add(createBitcodeWriterPass(out->os()));
-	pm.run(*module);
+
+	pm.run(game);
 	out->keep();
 
 	return errors.count() == 0;
@@ -156,7 +158,8 @@ void linker::build_objects() {
 					if (act.type->exec == action_type::exec_none) break;
 
 					if (act.target != action::self) code << "with (" << act.target << ")";
-					if (act.type->question) code << "if (" << (act.inv ? "!" : "");
+					if (act.type->question) code << "if (";
+					if (act.inv) code << '!';
 
 					if (act.type->exec == action_type::exec_code) {
 						code << "action_lib";
@@ -169,7 +172,7 @@ void linker::build_objects() {
 					code << '(';
 					unsigned int n = 0;
 					for (; n < act.nargs; n++) {
-						if (i != 0) code << ", ";
+						if (n != 0) code << ", ";
 						code << act.args[n];
 					}
 					for (; n < 16; n++) {
@@ -179,9 +182,9 @@ void linker::build_objects() {
 					if (act.type->relative) {
 						code << ", " << act.relative;
 					}
-					code << ")";
+					code << ')';
 
-					if (act.type->question) code << ")";
+					if (act.type->question) code << ')';
 
 					code << '\n';
 					break;

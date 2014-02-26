@@ -7,7 +7,7 @@ struct game;
 struct error_stream;
 
 namespace llvm {
-	class TargetData;
+	class DataLayout;
 }
 
 class linker {
@@ -25,7 +25,7 @@ private:
 	game &source;
 	error_stream &errors;
 
-	const llvm::TargetData *td;
+	const llvm::DataLayout *dl;
 	node_codegen compiler;
 };
 

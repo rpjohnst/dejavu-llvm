@@ -9,7 +9,7 @@ struct string {
 	template <int l>
 	string(const char (&d)[l]) : length(l), data(d) {}
 
-	int length;
+	size_t length;
 	const char *data;
 };
 

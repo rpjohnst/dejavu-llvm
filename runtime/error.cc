@@ -3,8 +3,10 @@
 #include <cstdlib>
 
 extern "C" void show_error(variant msg, variant abort) {
+	fputs("error: ", stderr);
 	string error = to_string(msg);
-	fprintf(stderr, "error: %.*s\n", error.length, error.data);
+	fwrite(error.data, 1, error.length, stderr);
+	fputs("\n", stderr);
 
 	if (to_real(abort)) exit(1);
 }

@@ -1,18 +1,18 @@
 #include "dejavu/compiler/codegen.h"
-#include "llvm/DerivedTypes.h"
-#include "llvm/Constants.h"
-#include "llvm/Target/TargetData.h"
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/DataLayout.h>
 #include <tuple>
 
 using namespace llvm;
 
-node_codegen::node_codegen(const TargetData *td) : builder(context), module("", context), td(td) {
+node_codegen::node_codegen(const DataLayout *dl) : builder(context), module("", context), dl(dl) {
 	real_type = builder.getDoubleTy();
 
 	Type *string[] = { builder.getInt32Ty(), builder.getInt8PtrTy() };
 	string_type = StructType::create(string, "string");
 
-	union_diff = td->getTypeAllocSize(real_type) - td->getTypeAllocSize(string_type);
+	union_diff = dl->getTypeAllocSize(real_type) - dl->getTypeAllocSize(string_type);
 	Type *union_type = union_diff > 0 ? real_type : string_type;
 
 	Type *variant[] = { builder.getInt8Ty(), union_type };
@@ -61,14 +61,16 @@ Function *node_codegen::add_function(node *body, const char *name, size_t nargs)
 	Function *function = Function::Create(type, Function::ExternalLinkage, name, &module);
 
 	Function::arg_iterator ai = function->arg_begin();
-	ai->addAttr(Attribute::NoAlias | Attribute::StructRet);
+	Attribute::AttrKind attrs[] = { Attribute::NoAlias, Attribute::StructRet };
+	ai->addAttr(AttributeSet::get(context, ai->getArgNo() + 1, attrs));
 	return_value = ai;
 	self_scope = ++ai;
 	other_scope = ++ai;
 
 	// todo: argument#, argument[#], argument_relative
 	for (++ai; ai != function->arg_end(); ++ai) {
-		ai->addAttr(Attribute::ByVal);
+		Attribute::AttrKind attr[] = { Attribute::ByVal };
+		ai->addAttr(AttributeSet::get(context, ai->getArgNo() + 1, attr));
 	}
 
 	BasicBlock *entry = BasicBlock::Create(context);
@@ -127,7 +129,7 @@ Value *node_codegen::visit_unary(unary *u) {
 
 	Value *result = alloc(variant_type);
 	Value *operand = alloc(variant_type);
-	builder.CreateMemCpy(operand, visit(u->right), td->getTypeStoreSize(variant_type), 0);
+	builder.CreateMemCpy(operand, visit(u->right), dl->getTypeStoreSize(variant_type), 0);
 
 	CallInst *call = builder.CreateCall2(get_operator(name, 1), result, operand);
 	call->addAttribute(1, Attribute::StructRet);
@@ -182,8 +184,8 @@ Value *node_codegen::visit_binary(binary *b) {
 	Value *left = alloc(variant_type);
 	Value *right = alloc(variant_type);
 	Value *result = alloc(variant_type);
-	builder.CreateMemCpy(left, visit(b->left), td->getTypeStoreSize(variant_type), 0);
-	builder.CreateMemCpy(right, visit(b->right), td->getTypeStoreSize(variant_type), 0);
+	builder.CreateMemCpy(left, visit(b->left), dl->getTypeStoreSize(variant_type), 0);
+	builder.CreateMemCpy(right, visit(b->right), dl->getTypeStoreSize(variant_type), 0);
 
 	CallInst *call = builder.CreateCall3(get_operator(name, 2), result, left, right);
 	call->addAttribute(1, Attribute::StructRet);
@@ -251,7 +253,7 @@ Value *node_codegen::visit_call(call *c) {
 
 	for (std::vector<expression*>::iterator it = c->args.begin(); it != c->args.end(); ++it) {
 		Value *arg = alloc(variant_type);
-		builder.CreateMemCpy(arg, visit(*it), td->getTypeStoreSize(variant_type), 0);
+		builder.CreateMemCpy(arg, visit(*it), dl->getTypeStoreSize(variant_type), 0);
 		args.push_back(arg);
 	}
 
@@ -266,7 +268,7 @@ Value *node_codegen::visit_call(call *c) {
 
 // todo: += -= etc.
 Value *node_codegen::visit_assignment(assignment *a) {
-	builder.CreateMemCpy(visit(a->lvalue), visit(a->rvalue), td->getTypeStoreSize(variant_type), 0);
+	builder.CreateMemCpy(visit(a->lvalue), visit(a->rvalue), dl->getTypeStoreSize(variant_type), 0);
 	return 0;
 }
 
@@ -616,7 +618,7 @@ Value *node_codegen::visit_jump(jump *j) {
 }
 
 Value *node_codegen::visit_returnstatement(returnstatement *r) {
-	builder.CreateMemCpy(return_value, visit(r->expr), td->getTypeStoreSize(variant_type), 0);
+	builder.CreateMemCpy(return_value, visit(r->expr), dl->getTypeStoreSize(variant_type), 0);
 	builder.CreateRetVoid();
 
 	Function *f = builder.GetInsertBlock()->getParent();
@@ -628,34 +630,40 @@ Value *node_codegen::visit_returnstatement(returnstatement *r) {
 
 Function *node_codegen::get_operator(const char *name, int args) {
 	Function *function = module.getFunction(name);
-	if (!function) {
-		std::vector<Type*> vargs(args + 1, variant_type->getPointerTo());
-		FunctionType *type = FunctionType::get(builder.getVoidTy(), vargs, false);
-		function = Function::Create(type, Function::ExternalLinkage, name, &module);
+	if (function) return function;
 
-		Function::arg_iterator ai = function->arg_begin();
-		ai->addAttr(Attribute::NoAlias | Attribute::StructRet);
-		for (++ai; ai != function->arg_end(); ++ai) {
-			ai->addAttr(Attribute::ByVal);
-		}
+	std::vector<Type*> vargs(args + 1, variant_type->getPointerTo());
+	FunctionType *type = FunctionType::get(builder.getVoidTy(), vargs, false);
+	function = Function::Create(type, Function::ExternalLinkage, name, &module);
+
+	Function::arg_iterator ai = function->arg_begin();
+	Attribute::AttrKind attrs[] = { Attribute::NoAlias, Attribute::StructRet };
+	ai->addAttr(AttributeSet::get(context, ai->getArgNo() + 1, attrs));
+	for (++ai; ai != function->arg_end(); ++ai) {
+		Attribute::AttrKind attr[] = { Attribute::ByVal };
+		ai->addAttr(AttributeSet::get(context, ai->getArgNo() + 1, attr));
 	}
+
 	return function;
 }
 
 Function *node_codegen::get_function(const char *name, int args) {
 	Function *function = module.getFunction(name);
-	if (!function) {
-		std::vector<Type*> vargs(args + 3, variant_type->getPointerTo());
-		vargs[1] = vargs[2] = scope_type;
-		FunctionType *type = FunctionType::get(builder.getVoidTy(), vargs, false);
-		function = Function::Create(type, Function::ExternalLinkage, name, &module);
+	if (function) return function;
 
-		Function::arg_iterator ai = function->arg_begin();
-		ai->addAttr(Attribute::NoAlias | Attribute::StructRet);
-		for (++ai, ++ai, ++ai; ai != function->arg_end(); ++ai) {
-			ai->addAttr(Attribute::ByVal);
-		}
+	std::vector<Type*> vargs(args + 3, variant_type->getPointerTo());
+	vargs[1] = vargs[2] = scope_type;
+	FunctionType *type = FunctionType::get(builder.getVoidTy(), vargs, var);
+	function = Function::Create(type, Function::ExternalLinkage, name, &module);
+
+	Function::arg_iterator ai = function->arg_begin();
+	Attribute::AttrKind attrs[] = { Attribute::NoAlias, Attribute::StructRet };
+	ai->addAttr(AttributeSet::get(context, ai->getArgNo() + 1, attrs));
+	for (std::next(ai, 3); ai != function->arg_end(); ++ai) {
+		Attribute::AttrKind attr[] = { Attribute::ByVal };
+		ai->addAttr(AttributeSet::get(context, ai->getArgNo() + 1, attr));
 	}
+
 	return function;
 }
 
@@ -674,7 +682,9 @@ Value *node_codegen::get_real(double val) {
 }
 
 Value *node_codegen::get_string(int length, const char *data) {
-	Constant *array = ConstantArray::get(context, StringRef(data, length), false);
+	Constant *array = ConstantDataArray::getString(
+		context, StringRef(data, length), false
+	);
 	GlobalVariable *str = new GlobalVariable(
 		module, array->getType(), true, GlobalValue::InternalLinkage, array, ".str"
 	);

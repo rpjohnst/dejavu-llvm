@@ -43,7 +43,7 @@ library_DEPENDS := $(library_SOURCES:.cc=.d)
 library_CXXFLAGS := -fpic
 library_CPPFLAGS := $(shell llvm-config --cppflags) -I$(JAVA_HOME)/include{,/linux}
 library_LDFLAGS := -shared $(shell llvm-config --ldflags)
-library_LDLIBS := $(shell llvm-config --libs core native scalaropts ipo linker bitwriter)
+library_LDLIBS := $(shell llvm-config --libs core native scalaropts ipo linker bitreader bitwriter)
 
 dejavu.so: $(library_OBJECTS)
 	$(CXX) $(library_LDFLAGS) -o $@ $^ $(library_LDLIBS)

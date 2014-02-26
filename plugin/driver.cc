@@ -52,5 +52,5 @@ bool compile(const char *target, game &source, build_log &log) {
 	error_printer errors(log);
 
 	llvm::InitializeNativeTarget();
-	return linker(source, llvm::sys::getHostTriple(), errors).build(target);
+	return linker(source, llvm::sys::getDefaultTargetTriple(), errors).build(target);
 }

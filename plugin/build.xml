@@ -22,7 +22,7 @@
 
 	<target name="compile">
 		<javac
-			source="1.6" target="1.6" includeantruntime="no"
+			source="1.7" target="1.7" includeantruntime="no"
 			sourcepath="${basedir}"
 			classpath="../../LateralGM/lgm16b4.jar"
 			srcdir="${basedir}"
