@@ -266,9 +266,30 @@ Value *node_codegen::visit_call(call *c) {
 	return args[0];
 }
 
-// todo: += -= etc.
 Value *node_codegen::visit_assignment(assignment *a) {
-	builder.CreateMemCpy(visit(a->lvalue), visit(a->rvalue), dl->getTypeStoreSize(variant_type), 0);
+	Value *r;
+	if (a->op == equals) {
+		r = visit(a->rvalue);
+	}
+	else {
+		token_type op = unexpected;
+		switch (a->op) {
+		case plus_equals: op = plus; break;
+		case minus_equals: op = minus; break;
+		case times_equals: op = times; break;
+		case div_equals: op = divide; break;
+		case and_equals: op = bit_and; break;
+		case or_equals: op = bit_or; break;
+		case xor_equals: op = bit_xor; break;
+		default: /* should've already errored */ break;
+		}
+		binary b(op, a->lvalue, a->rvalue);
+		r = visit_binary(&b);
+	}
+
+	builder.CreateMemCpy(
+		visit(a->lvalue), r, dl->getTypeStoreSize(variant_type), 0
+	);
 	return 0;
 }
 
