@@ -3,6 +3,8 @@
 
 #include "dejavu/runtime/variant.h"
 
-extern "C" void show_error(variant msg, variant abort);
+struct scope;
+
+extern "C" variant show_error(scope *self, scope *other, signed char n, ...);
 
 #endif

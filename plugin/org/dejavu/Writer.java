@@ -56,6 +56,17 @@ public class Writer {
 				a.setExec(act.execType);
 				a.setCode(act.execInfo);
 
+				argumentTypeArray argsOut = new argumentTypeArray(
+					act.libArguments.length
+				);
+				int j = 0;
+				for (LibArgument arg : act.libArguments) {
+					argsOut.setitem(j, arg.kind);
+					j++;
+				}
+				a.setNargs(act.libArguments.length);
+				a.setArgs(argsOut.cast());
+
 				actionsOut.setitem(i, a);
 				actionTypes.put(act, a);
 				i++;

@@ -25,6 +25,7 @@
 %array_move(event, eventArray);
 %array_move(action_type, actionTypeArray);
 %array_move(action, actionArray);
+%array_class(int, argumentTypeArray);
 %array_move(argument, argArray);
 
 %include "dejavu/linker/game.h"

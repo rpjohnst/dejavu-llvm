@@ -3,24 +3,26 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DataLayout.h>
 #include <tuple>
+#include <sstream>
 
 using namespace llvm;
 
-node_codegen::node_codegen(const DataLayout *dl) : builder(context), module("", context), dl(dl) {
+node_codegen::node_codegen(const DataLayout *dl, error_stream &e)
+	: builder(context), module("", context), dl(dl), errors(e) {
 	real_type = builder.getDoubleTy();
 
 	Type *string[] = { builder.getInt32Ty(), builder.getInt8PtrTy() };
-	string_type = StructType::create(string, "string");
+	string_type = StructType::create(string, "struct.string");
 
 	union_diff = dl->getTypeAllocSize(real_type) - dl->getTypeAllocSize(string_type);
 	Type *union_type = union_diff > 0 ? real_type : string_type;
 
 	Type *variant[] = { builder.getInt8Ty(), union_type };
-	variant_type = StructType::create(variant, "variant");
+	variant_type = StructType::create(variant, "struct.variant");
 
 	Type *dim = Type::getInt16Ty(context), *contents = variant_type->getPointerTo();
 	Type *var[] = { dim, dim, contents };
-	var_type = StructType::create(var, "var");
+	var_type = StructType::create(var, "struct.var");
 
 	scope_type = StructType::create(context, "scope")->getPointerTo();
 
@@ -53,25 +55,20 @@ node_codegen::node_codegen(const DataLayout *dl) : builder(context), module("", 
 
 // fixme: this can only be called one at a time, not nested for e.g. closures
 // it would have to save args, return_value, {self,other}_scope, insertion point
-Function *node_codegen::add_function(node *body, const char *name, size_t nargs) {
-	std::vector<Type*> args(nargs + 3, variant_type->getPointerTo());
-	args[1] = args[2] = scope_type;
-
-	FunctionType *type = FunctionType::get(builder.getVoidTy(), args, false);
-	Function *function = Function::Create(type, Function::ExternalLinkage, name, &module);
+Function *node_codegen::add_function(node *body, const char *name, size_t nargs, bool var) {
+	Function *function = get_function(name, nargs, var);
+	if (!function->empty()) {
+		std::ostringstream ss;
+		ss << "error: redefinition of function " << name;
+		errors.error(ss.str().c_str());
+		return function;
+	}
 
 	Function::arg_iterator ai = function->arg_begin();
-	Attribute::AttrKind attrs[] = { Attribute::NoAlias, Attribute::StructRet };
-	ai->addAttr(AttributeSet::get(context, ai->getArgNo() + 1, attrs));
 	return_value = ai;
 	self_scope = ++ai;
 	other_scope = ++ai;
-
-	// todo: argument#, argument[#], argument_relative
-	for (++ai; ai != function->arg_end(); ++ai) {
-		Attribute::AttrKind attr[] = { Attribute::ByVal };
-		ai->addAttr(AttributeSet::get(context, ai->getArgNo() + 1, attr));
-	}
+	passed_args = ++ai;
 
 	BasicBlock *entry = BasicBlock::Create(context);
 
@@ -242,14 +239,15 @@ Value *node_codegen::visit_subscript(subscript *s) {
 
 Value *node_codegen::visit_call(call *c) {
 	std::string name(c->function->t.string.data, c->function->t.string.length);
-	Function *function = get_function(name.c_str(), c->args.size());
+	Function *function = get_function(name.c_str(), 0, true);
 
 	std::vector<Value*> args;
-	args.reserve(c->args.size() + 3);
+	args.reserve(c->args.size() + 4);
 
 	args.push_back(alloc(variant_type));
 	args.push_back(self_scope);
 	args.push_back(other_scope);
+	args.push_back(ConstantInt::get(IntegerType::get(context, 8), c->args.size()));
 
 	for (std::vector<expression*>::iterator it = c->args.begin(); it != c->args.end(); ++it) {
 		Value *arg = alloc(variant_type);
@@ -259,9 +257,6 @@ Value *node_codegen::visit_call(call *c) {
 
 	CallInst *call = builder.CreateCall(function, args);
 	call->addAttribute(1, Attribute::StructRet);
-	for (std::vector<Value*>::size_type i = 4; i <= args.size(); i++) {
-		call->addAttribute(i, Attribute::ByVal);
-	}
 
 	return args[0];
 }
@@ -668,22 +663,22 @@ Function *node_codegen::get_operator(const char *name, int args) {
 	return function;
 }
 
-Function *node_codegen::get_function(const char *name, int args) {
+// TODO: don't use (i8, ...) for built-ins
+Function *node_codegen::get_function(const char *name, int args, bool var) {
 	Function *function = module.getFunction(name);
 	if (function) return function;
 
-	std::vector<Type*> vargs(args + 3, variant_type->getPointerTo());
+	std::vector<Type*> vargs(args + 4, variant_type->getPointerTo());
 	vargs[1] = vargs[2] = scope_type;
+	vargs[3] = IntegerType::get(context, 8);
 	FunctionType *type = FunctionType::get(builder.getVoidTy(), vargs, var);
 	function = Function::Create(type, Function::ExternalLinkage, name, &module);
 
 	Function::arg_iterator ai = function->arg_begin();
 	Attribute::AttrKind attrs[] = { Attribute::NoAlias, Attribute::StructRet };
 	ai->addAttr(AttributeSet::get(context, ai->getArgNo() + 1, attrs));
-	for (std::next(ai, 3); ai != function->arg_end(); ++ai) {
-		Attribute::AttrKind attr[] = { Attribute::ByVal };
-		ai->addAttr(AttributeSet::get(context, ai->getArgNo() + 1, attr));
-	}
+
+	// TODO: argument#, argument[#], argument_relative
 
 	return function;
 }

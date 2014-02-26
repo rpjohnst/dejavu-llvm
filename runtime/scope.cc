@@ -27,8 +27,12 @@ extern "C" var *lookup(scope *self, scope *other, double id, string name) {
 	case -5: s = &global; break;
 
 	// todo: check on all.foo
-	case -3: case -4: show_error("variable does not exist", true); return 0;
-	case -6: show_error("local is not supported", true); return 0;
+	case -3: case -4:
+		show_error(self, other, 2, "variable does not exist", true);
+		return 0;
+	case -6:
+		show_error(self, other, 2, "local is not supported", true);
+		return 0;
 
 	// todo: other instance access
 	default: return 0;
@@ -41,12 +45,12 @@ extern "C" var *lookup(scope *self, scope *other, double id, string name) {
 // todo: resizing
 extern "C" variant *access(var *a, double x, double y) {
 	if (x < 0 || x >= a->x) {
-		show_error("index out of bounds", true);
+		show_error(0, 0, 2, "index out of bounds", true);
 		return 0;
 	}
 
 	if (y < 0 || y >= a->y) {
-		show_error("index_out of bounds", true);
+		show_error(0, 0, 2, "index_out of bounds", true);
 		return 0;
 	}
 

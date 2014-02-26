@@ -3,6 +3,8 @@
 
 #include "dejavu/compiler/lexer.h"
 
+// todo: lexer errors
+
 struct unexpected_token_error {
 	unexpected_token_error(token unexpected, const char *expected) :
 		unexpected(unexpected), expected(expected) {}
@@ -15,8 +17,8 @@ struct unexpected_token_error {
 	token_type expected_token = ::unexpected;
 };
 
-// todo: lexer errors
 // todo: codegen errors
+
 // todo: linker errors
 
 struct error_stream {

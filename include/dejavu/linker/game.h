@@ -11,9 +11,9 @@ struct script {
 
 struct argument {
 	enum {
-		arg_expr, arg_string, arg_both, arg_bool, arg_menu, arg_color, arg_fontstr,
+		arg_expr, arg_string, arg_both, arg_bool, arg_menu,
 		arg_sprite, arg_sound, arg_background, arg_path, arg_script, arg_object,
-		arg_room, arg_font, arg_timeline
+		arg_room, arg_font, arg_color, arg_timeline, arg_fontstr
 	} kind;
 	char *val;
 	unsigned int resource;
@@ -32,6 +32,8 @@ struct action_type {
 	enum { exec_none, exec_function, exec_code } exec;
 	char *code;
 
+	unsigned int nargs;
+	int *args; // argument_type
 };
 
 struct action {

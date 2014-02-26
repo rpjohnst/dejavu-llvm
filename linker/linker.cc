@@ -98,9 +98,11 @@ void linker::build_libraries() {
 		if (source.actions[i].parent > -1) name << source.actions[i].parent;
 		name << "_" << source.actions[i].id;
 
+		size_t nargs = source.actions[i].nargs;
+		if (source.actions[i].relative) nargs++;
 		add_function(
 			strlen(source.actions[i].code), source.actions[i].code,
-			name.str().c_str(), 16 + source.actions[i].relative
+			name.str().c_str(), nargs, false
 		);
 	}
 }
@@ -108,7 +110,7 @@ void linker::build_libraries() {
 void linker::build_scripts() {
 	for (unsigned int i = 0; i < source.nscripts; i++) {
 		add_function(
-			strlen(source.scripts[i].code), source.scripts[i].code, source.scripts[i].name, 16
+			strlen(source.scripts[i].code), source.scripts[i].code, source.scripts[i].name, 0, true
 		);
 	}
 }
@@ -148,7 +150,7 @@ void linker::build_objects() {
 				case action_type::act_code: {
 					std::ostringstream s;
 					s << obj.name << "_" << evt.main_id << "_" << evt.sub_id << "_" << a;
-					add_function(strlen(act.args[0].val), act.args[0].val, s.str(), 0);
+					add_function(strlen(act.args[0].val), act.args[0].val, s.str(), 0, false);
 
 					code << s.str() << "()\n";
 					break;
@@ -197,7 +199,7 @@ void linker::build_objects() {
 			std::ostringstream s;
 			s << obj.name << "_" << evt.main_id << "_" << evt.sub_id;
 			std::string c = code.str();
-			add_function(c.size(), c.c_str(), s.str(), 0);
+			add_function(c.size(), c.c_str(), s.str(), 0, false);
 		}
 	}
 }
@@ -233,7 +235,10 @@ std::ostream &operator <<(std::ostream &out, const argument &arg) {
 	}
 }
 
-void linker::add_function(size_t length, const char *data, const std::string &name, int args) {
+void linker::add_function(
+	size_t length, const char *data,
+	const std::string &name, int args, bool var
+) {
 	buffer code(length, data);
 	token_stream tokens(code);
 

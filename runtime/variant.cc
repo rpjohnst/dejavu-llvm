@@ -5,14 +5,14 @@
 extern "C" double to_real(variant a) {
 	switch (a.type) {
 	case 0: return a.real;
-	default: show_error("expected a real", true); return 0;
+	default: show_error(0, 0, 2, "expected a real", true); return 0;
 	}
 }
 
 extern "C" string to_string(variant a) {
 	switch (a.type) {
 	case 1: return a.string;
-	default: show_error("expected a string", true); return string();
+	default: show_error(0, 0, 2, "expected a string", true); return string();
 	}
 }
 
@@ -22,7 +22,7 @@ typedef variant unary(variant);
 
 #define UNARY_OP(name) static variant name(variant a)
 #define UNARY_ERROR(op, s) static variant op ## _error(variant) { \
-	return show_error("wrong type to " #s, true), 0; \
+	return show_error(0, 0, 2, "wrong type to " #s, true), 0; \
 }
 #define UNARY_TABLE(op) static unary *const op ## _table[]
 #define UNARY_DISPATCH(op) extern "C" variant op(variant a) { \
@@ -51,7 +51,7 @@ typedef variant binary(variant, variant);
 	__attribute__((unused)) variant a, __attribute__((unused)) variant b \
 )
 #define BINARY_ERROR(op, s) static variant op ## _error(variant, variant) { \
-	return show_error("wrong types to " #s, true), 0; \
+	return show_error(0, 0, 2, "wrong types to " #s, true), 0; \
 }
 #define BINARY_TABLE(op) static binary *const op ## _table[][2]
 #define BINARY_DISPATCH(op) extern "C" variant op(variant a, variant b) { \

@@ -20,7 +20,10 @@ private:
 	void build_scripts();
 	void build_objects();
 
-	void add_function(size_t length, const char *code, const std::string &name, int args);
+	void add_function(
+		size_t length, const char *code,
+		const std::string &name, int args, bool var
+	);
 
 	game &source;
 	error_stream &errors;

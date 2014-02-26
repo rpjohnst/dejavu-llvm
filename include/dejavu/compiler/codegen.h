@@ -2,6 +2,7 @@
 #define CODEGEN_H
 
 #include "dejavu/compiler/node_visitor.h"
+#include <dejavu/compiler/error_stream.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
@@ -14,8 +15,8 @@ namespace llvm {
 
 class node_codegen : public node_visitor<node_codegen, llvm::Value*> {
 public:
-	node_codegen(const llvm::DataLayout*);
-	llvm::Function *add_function(node*, const char *name, size_t nargs);
+	node_codegen(const llvm::DataLayout*, error_stream &e);
+	llvm::Function *add_function(node*, const char *name, size_t nargs, bool var);
 	llvm::Module &get_module() { return module; }
 
 	llvm::Value *visit_value(value *v);
@@ -42,7 +43,7 @@ public:
 	llvm::Value *visit_casestatement(casestatement *c);
 
 private:
-	llvm::Function *get_function(const char *name, int args);
+	llvm::Function *get_function(const char *name, int args, bool var);
 	llvm::Function *get_operator(const char *name, int args);
 
 	llvm::Value *get_real(double val);
@@ -82,6 +83,7 @@ private:
 	llvm::Value *self_scope = 0;
 	llvm::Value *other_scope = 0;
 	llvm::Value *return_value = 0;
+	llvm::Value *passed_args = 0;
 
 	llvm::BasicBlock *current_loop = 0;
 	llvm::BasicBlock *current_end = 0;
@@ -89,6 +91,8 @@ private:
 	llvm::Function::iterator current_cond = 0;
 	llvm::BasicBlock *current_default = 0;
 	llvm::Value *current_switch = 0;
+
+	error_stream& errors;
 };
 
 #endif
