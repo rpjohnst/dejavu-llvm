@@ -63,44 +63,6 @@ token_stream::token_stream(buffer &b) :
 token token_stream::gettoken() {
 	skipwhitespace();
 
-	// skip comments
-	// todo: can we pull this out into a helper function?
-	// the control flow interacts weirdly with whitespace and division
-	if (*current == '/') {
-		// don't increment current yet, it might be a / token
-
-		// single-line comment
-		if (*(current + 1) == '/') {
-			current++;
-			while (current != buffer_end && !isnewline(*++current))
-				continue;
-		}
-		// multi-line comment
-		else if (*(current + 1) == '*') {
-			current += 2;
-			col += 2;
-
-			while (
-				(*current++ != '*' || *current != '/') &&
-				(current + 1 != buffer_end)
-			) {
-				col++;
-				if (isnewline(*current)) {
-					skipnewline();
-				}
-			}
-
-			current++;
-			col++;
-		}
-		// division token
-		else {
-			return getoperator();
-		}
-
-		return gettoken();
-	}
-
 	if (isnamestart(*current))
 		return getname();
 
@@ -129,19 +91,70 @@ token token_stream::gettoken() {
 	return u;
 }
 
-// skips any whitespace at the current position
+// skips any whitespace or comments at the current position
 void token_stream::skipwhitespace() {
-	for (; current != buffer_end && isspace(*current); current++) {
+	for (; current != buffer_end; current++) {
 		if (*current == '\t') {
 			col += 4;
 		}
 		else if (isnewline(*current)) {
 			skipnewline();
 		}
-		else {
+		else if (isspace(*current)) {
 			col += 1;
 		}
+		else if (*current == '/') {
+			if (skipcomment()) {
+				if (current == buffer_end) {
+					break;
+				}
+			}
+			else {
+				break;
+			}
+		}
+		else {
+			break;
+		}
 	}
+}
+
+bool token_stream::skipcomment() {
+	// single-line comment
+	if (*(current + 1) == '/') {
+		current += 2;
+
+		for (; current != buffer_end; current++) {
+			if (isnewline(*current)) {
+				break;
+			}
+		}
+
+		return true;
+	}
+	// multi-line comment
+	else if (*(current + 1) == '*') {
+		current += 2;
+		col += 2;
+
+		for (; current != buffer_end; current++) {
+			if (*current == '*' && *(current + 1) == '/') {
+				current++;
+				col += 2;
+				break;
+			}
+			else if (isnewline(*current)) {
+				skipnewline();
+			}
+			else {
+				col += 1;
+			}
+		}
+
+		return true;
+	}
+
+	return false;
 }
 
 // skips a newline at the current position

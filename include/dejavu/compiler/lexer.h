@@ -39,6 +39,7 @@ public:
 private:
 	// helper functions
 	void skipwhitespace();
+	bool skipcomment();
 	void skipnewline();
 	token getname();
 	token getoperator();
