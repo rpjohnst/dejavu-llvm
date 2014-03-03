@@ -68,7 +68,7 @@ Function *node_codegen::add_function(node *body, const char *name, size_t nargs,
 	return_value = ai;
 	self_scope = ++ai;
 	other_scope = ++ai;
-	passed_args = ++ai;
+	passed_args = var ? ++ai : 0;
 
 	BasicBlock *entry = BasicBlock::Create(context);
 
@@ -239,7 +239,11 @@ Value *node_codegen::visit_subscript(subscript *s) {
 
 Value *node_codegen::visit_call(call *c) {
 	std::string name(c->function->t.string.data, c->function->t.string.length);
-	Function *function = get_function(name.c_str(), 0, true);
+	bool var = scripts.find(name) != scripts.end();
+
+	Function *function = get_function(
+		name.c_str(), var ? 0 : c->args.size(), var
+	);
 
 	std::vector<Value*> args;
 	args.reserve(c->args.size() + 4);
@@ -247,9 +251,16 @@ Value *node_codegen::visit_call(call *c) {
 	args.push_back(alloc(variant_type));
 	args.push_back(self_scope);
 	args.push_back(other_scope);
-	args.push_back(ConstantInt::get(IntegerType::get(context, 8), c->args.size()));
+	if (var) {
+		args.push_back(
+			ConstantInt::get(IntegerType::get(context, 8), c->args.size())
+		);
+	}
 
-	for (std::vector<expression*>::iterator it = c->args.begin(); it != c->args.end(); ++it) {
+	for (
+		std::vector<expression*>::iterator it = c->args.begin();
+		it != c->args.end(); ++it
+	) {
 		Value *arg = alloc(variant_type);
 		builder.CreateMemCpy(arg, visit(*it), dl->getTypeStoreSize(variant_type), 0);
 		args.push_back(arg);
@@ -663,14 +674,13 @@ Function *node_codegen::get_operator(const char *name, int args) {
 	return function;
 }
 
-// TODO: don't use (i8, ...) for built-ins
 Function *node_codegen::get_function(const char *name, int args, bool var) {
 	Function *function = module.getFunction(name);
 	if (function) return function;
 
-	std::vector<Type*> vargs(args + 4, variant_type->getPointerTo());
+	std::vector<Type*> vargs(args + (var ? 4 : 3), variant_type->getPointerTo());
 	vargs[1] = vargs[2] = scope_type;
-	vargs[3] = IntegerType::get(context, 8);
+	if (var) vargs[3] = IntegerType::get(context, 8);
 	FunctionType *type = FunctionType::get(builder.getVoidTy(), vargs, var);
 	function = Function::Create(type, Function::ExternalLinkage, name, &module);
 

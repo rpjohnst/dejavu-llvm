@@ -1,12 +1,13 @@
 #ifndef CODEGEN_H
 #define CODEGEN_H
 
-#include "dejavu/compiler/node_visitor.h"
+#include <dejavu/compiler/node_visitor.h>
 #include <dejavu/compiler/error_stream.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
-#include <map>
+#include <unordered_map>
+#include <unordered_set>
 #include <string>
 
 namespace llvm {
@@ -19,6 +20,9 @@ public:
 	llvm::Function *add_function(node*, const char *name, size_t nargs, bool var);
 	llvm::Module &get_module() { return module; }
 
+	void register_script(const std::string &name);
+
+// really should be private
 	llvm::Value *visit_value(value *v);
 	llvm::Value *visit_unary(unary *u);
 	llvm::Value *visit_binary(binary *b);
@@ -78,7 +82,8 @@ private:
 	llvm::Function *with_inc;
 
 	// scope handling
-	std::map<std::string, llvm::Value*> scope;
+	std::unordered_set<std::string> scripts;
+	std::unordered_map<std::string, llvm::Value*> scope;
 	llvm::Instruction *alloca_point = 0;
 	llvm::Value *self_scope = 0;
 	llvm::Value *other_scope = 0;
@@ -94,5 +99,9 @@ private:
 
 	error_stream& errors;
 };
+
+inline void node_codegen::register_script(const std::string &name) {
+	scripts.insert(name);
+}
 
 #endif

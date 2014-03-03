@@ -108,9 +108,15 @@ void linker::build_libraries() {
 }
 
 void linker::build_scripts() {
+	// first pass so the code generator knows which functions are scripts
+	for (unsigned int i = 0; i < source.nscripts; i++) {
+		compiler.register_script(std::string(source.scripts[i].name));
+	}
+
 	for (unsigned int i = 0; i < source.nscripts; i++) {
 		add_function(
-			strlen(source.scripts[i].code), source.scripts[i].code, source.scripts[i].name, 0, true
+			strlen(source.scripts[i].code), source.scripts[i].code,
+			source.scripts[i].name, 0, true
 		);
 	}
 }
@@ -176,10 +182,6 @@ void linker::build_objects() {
 					for (; n < act.nargs; n++) {
 						if (n != 0) code << ", ";
 						code << act.args[n];
-					}
-					for (; n < 16; n++) {
-						if (n != 0) code << ", ";
-						code << 0;
 					}
 					if (act.type->relative) {
 						code << ", " << act.relative;

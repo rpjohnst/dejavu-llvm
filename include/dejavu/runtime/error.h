@@ -5,6 +5,8 @@
 
 struct scope;
 
-extern "C" variant show_error(scope *self, scope *other, signed char n, ...);
+extern "C" variant show_error(
+	scope *self, scope *other, variant msg, variant abort
+);
 
 #endif
