@@ -28,10 +28,10 @@ extern "C" var *lookup(scope *self, scope *other, double id, string name) {
 
 	// todo: check on all.foo
 	case -3: case -4:
-		show_error(self, other, 2, "variable does not exist", true);
+		show_error(self, other, "variable does not exist", true);
 		return 0;
 	case -6:
-		show_error(self, other, 2, "local is not supported", true);
+		show_error(self, other, "local is not supported", true);
 		return 0;
 
 	// todo: other instance access
