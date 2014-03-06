@@ -43,16 +43,16 @@ extern "C" var *lookup(scope *self, scope *other, double id, string name) {
 }
 
 // todo: resizing
-extern "C" variant *access(var *a, double x, double y) {
-	if (x < 0 || x >= a->x) {
-		show_error(0, 0, 2, "index out of bounds", true);
+extern "C" variant *access(var *a, unsigned short x, unsigned short y) {
+	if (x >= a->x) {
+		show_error(0, 0, "index out of bounds", true);
 		return 0;
 	}
 
-	if (y < 0 || y >= a->y) {
-		show_error(0, 0, 2, "index_out of bounds", true);
+	if (y >= a->y) {
+		show_error(0, 0, "index out of bounds", true);
 		return 0;
 	}
 
-	return &a->contents[static_cast<int>(x + y * a->x)];
+	return &a->contents[x + y * a->x];
 }

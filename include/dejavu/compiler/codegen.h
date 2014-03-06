@@ -17,7 +17,9 @@ namespace llvm {
 class node_codegen : public node_visitor<node_codegen, llvm::Value*> {
 public:
 	node_codegen(const llvm::DataLayout*, error_stream &e);
-	llvm::Function *add_function(node*, const char *name, size_t nargs, bool var);
+	llvm::Function *add_function(
+		node*, const char *name, size_t nargs, bool var
+	);
 	llvm::Module &get_module() { return module; }
 
 	void register_script(const std::string &name);
@@ -47,15 +49,25 @@ public:
 	llvm::Value *visit_casestatement(casestatement *c);
 
 private:
-	llvm::Function *get_function(const char *name, int args, bool var);
-	llvm::Function *get_operator(const char *name, int args);
+	llvm::Function *get_function(const llvm::StringRef &name, int args, bool var);
+	llvm::Function *get_operator(const llvm::StringRef &name, int args);
 
 	llvm::Value *get_real(double val);
+	llvm::Value *get_real(llvm::Value *val);
+
 	llvm::Value *get_string(int length, const char *val);
 	llvm::Value *to_bool(node *val);
 	llvm::Value *is_equal(llvm::Value *a, llvm::Value *b);
 
-	llvm::AllocaInst *alloc(llvm::Type *type, const llvm::Twine &name = "");
+	llvm::Value *make_local(const std::string &name, llvm::Value *value);
+	llvm::Value *make_local(
+		const std::string &name, llvm::Value *x, llvm::Value *y,
+		llvm::Value *values
+	);
+
+	llvm::AllocaInst *alloc(llvm::Type*, const llvm::Twine&);
+	llvm::AllocaInst *alloc(llvm::Type*, llvm::Value*, const llvm::Twine&);
+
 	llvm::Value *do_lookup(llvm::Value *left, llvm::Value *right);
 
 	llvm::LLVMContext context;
@@ -85,10 +97,9 @@ private:
 	std::unordered_set<std::string> scripts;
 	std::unordered_map<std::string, llvm::Value*> scope;
 	llvm::Instruction *alloca_point = 0;
+	llvm::Value *return_value = 0;
 	llvm::Value *self_scope = 0;
 	llvm::Value *other_scope = 0;
-	llvm::Value *return_value = 0;
-	llvm::Value *passed_args = 0;
 
 	llvm::BasicBlock *current_loop = 0;
 	llvm::BasicBlock *current_end = 0;
@@ -102,6 +113,17 @@ private:
 
 inline void node_codegen::register_script(const std::string &name) {
 	scripts.insert(name);
+}
+
+inline llvm::AllocaInst *node_codegen::alloc(
+	llvm::Type *type, const llvm::Twine &name = ""
+) {
+	return alloc(type, NULL, name);
+}
+inline llvm::AllocaInst *node_codegen::alloc(
+	llvm::Type *type, llvm::Value *n, const llvm::Twine &name = ""
+) {
+	return new llvm::AllocaInst(type, n, name, alloca_point);
 }
 
 #endif

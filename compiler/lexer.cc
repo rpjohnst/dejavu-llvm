@@ -59,7 +59,6 @@ token_stream::token_stream(buffer &b) :
 	row(1), col(1), source(b), current(b.begin()), buffer_end(b.end()) {
 }
 
-// todo: potential cleanup/optimization with a switch statement
 token token_stream::gettoken() {
 	skipwhitespace();
 

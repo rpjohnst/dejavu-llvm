@@ -9,53 +9,99 @@ using namespace llvm;
 
 node_codegen::node_codegen(const DataLayout *dl, error_stream &e)
 	: builder(context), module("", context), dl(dl), errors(e) {
+
 	real_type = builder.getDoubleTy();
 
 	Type *string[] = { builder.getInt32Ty(), builder.getInt8PtrTy() };
 	string_type = StructType::create(string, "struct.string");
 
-	union_diff = dl->getTypeAllocSize(real_type) - dl->getTypeAllocSize(string_type);
+	union_diff =
+		dl->getTypeAllocSize(real_type) - dl->getTypeAllocSize(string_type);
 	Type *union_type = union_diff > 0 ? real_type : string_type;
 
 	Type *variant[] = { builder.getInt8Ty(), union_type };
 	variant_type = StructType::create(variant, "struct.variant");
 
-	Type *dim = Type::getInt16Ty(context), *contents = variant_type->getPointerTo();
+	Type
+		*dim = builder.getInt16Ty(),
+		*contents = variant_type->getPointerTo();
 	Type *var[] = { dim, dim, contents };
 	var_type = StructType::create(var, "struct.var");
 
 	scope_type = StructType::create(context, "scope")->getPointerTo();
 
-	// todo: move to a separate runtime?
+	// runtime functions
+	// todo: put these in a library like the GML standard library
 	Type *lookup_args[] = { scope_type, scope_type, real_type, string_type };
-	Type *lookup_ret = var_type->getPointerTo();
-	FunctionType *lookup_type = FunctionType::get(lookup_ret, lookup_args, false);
-	lookup = Function::Create(lookup_type, Function::ExternalLinkage, "lookup", &module);
+	FunctionType *lookup_type = FunctionType::get(
+		var_type->getPointerTo(), lookup_args, false
+	);
+	lookup = Function::Create(
+		lookup_type, Function::ExternalLinkage, "lookup", &module
+	);
 
-	Type *access_args[] = { var_type->getPointerTo(), real_type, real_type };
-	Type *access_ret = variant_type->getPointerTo();
-	FunctionType *access_type = FunctionType::get(access_ret, access_args, false);
-	access = Function::Create(access_type, Function::ExternalLinkage, "access", &module);
+	Type *access_args[] = {
+		var_type->getPointerTo(), builder.getInt16Ty(), builder.getInt16Ty()
+	};
+	FunctionType *access_type = FunctionType::get(
+		variant_type->getPointerTo(), access_args, false
+	);
+	access = Function::Create(
+		access_type, Function::ExternalLinkage, "access", &module
+	);
 
-	FunctionType *to_real_ty = FunctionType::get(real_type, variant_type->getPointerTo(), false);
-	to_real = Function::Create(to_real_ty, Function::ExternalLinkage, "to_real", &module);
+	FunctionType *to_real_type = FunctionType::get(
+		real_type, variant_type->getPointerTo(), false
+	);
+	to_real = Function::Create(
+		to_real_type, Function::ExternalLinkage, "to_real", &module
+	);
 
-	FunctionType *to_str_ty = FunctionType::get(string_type, variant_type->getPointerTo(), false);
-	to_string = Function::Create(to_str_ty, Function::ExternalLinkage, "to_string", &module);
+	FunctionType *to_str_type = FunctionType::get(
+		string_type, variant_type->getPointerTo(), false
+	);
+	to_string = Function::Create(
+		to_str_type, Function::ExternalLinkage, "to_string", &module
+	);
 
 	// todo: should there be a separate with_iterator type?
-	Type *with_begin_args[] = { scope_type, scope_type, variant_type->getPointerTo() };
-	FunctionType *with_begin_ty = FunctionType::get(scope_type, with_begin_args, false);
-	with_begin = Function::Create(with_begin_ty, Function::ExternalLinkage, "with_begin", &module);
+	Type *with_begin_args[] = {
+		scope_type, scope_type, variant_type->getPointerTo()
+	};
+	FunctionType *with_begin_type = FunctionType::get(
+		scope_type, with_begin_args, false
+	);
+	with_begin = Function::Create(
+		with_begin_type, Function::ExternalLinkage, "with_begin", &module
+	);
 
-	Type *with_inc_args[] = { scope_type, scope_type, variant_type->getPointerTo(), scope_type };
-	FunctionType *with_inc_ty = FunctionType::get(scope_type, with_inc_args, false);
-	with_inc = Function::Create(with_inc_ty, Function::ExternalLinkage, "with_inc", &module);
+	Type *with_inc_args[] = {
+		scope_type, scope_type, variant_type->getPointerTo(), scope_type
+	};
+	FunctionType *with_inc_type = FunctionType::get(
+		scope_type, with_inc_args, false
+	);
+	with_inc = Function::Create(
+		with_inc_type, Function::ExternalLinkage, "with_inc", &module
+	);
 }
 
-// fixme: this can only be called one at a time, not nested for e.g. closures
-// it would have to save args, return_value, {self,other}_scope, insertion point
-Function *node_codegen::add_function(node *body, const char *name, size_t nargs, bool var) {
+namespace {
+	template <typename... types>
+	class save_context {
+	public:
+		save_context(types&... args) : context(args...), data(args...) {}
+		~save_context() { context = data; }
+
+	private:
+		std::tuple<types&...> context;
+		std::tuple<types...> data;
+	};
+}
+
+Function *node_codegen::add_function(
+	node *body, const char *name, size_t nargs, bool var
+) {
 	Function *function = get_function(name, nargs, var);
 	if (!function->empty()) {
 		std::ostringstream ss;
@@ -64,21 +110,46 @@ Function *node_codegen::add_function(node *body, const char *name, size_t nargs,
 		return function;
 	}
 
+	// this is not reentrant. it would need to save the state of:
+	// return, scopes, insertion point, and symbol table
 	Function::arg_iterator ai = function->arg_begin();
 	return_value = ai;
 	self_scope = ++ai;
 	other_scope = ++ai;
-	passed_args = var ? ++ai : 0;
 
 	BasicBlock *entry = BasicBlock::Create(context);
 
 	scope.clear();
-	alloca_point = new BitCastInst(builder.getInt32(0), builder.getInt32Ty(), "alloca", entry);
+	alloca_point = new BitCastInst(
+		builder.getInt32(0), builder.getInt32Ty(), "alloca", entry
+	);
 
 	function->getBasicBlockList().push_back(entry);
 	builder.SetInsertPoint(entry);
-	visit(body);
 
+	if (var) {
+		Value *arg_count = ++ai;
+		Value *arg_array = ++ai;
+
+		scope["argument_count"] = make_local("argument_count", get_real(
+			builder.CreateUIToFP(arg_count, builder.getDoubleTy())
+		));
+		scope["argument"] = make_local(
+			"argument", arg_count, builder.getInt16(1), arg_array
+		);
+
+		// todo: accessors for bounds checking (also needed for builtin locals)
+		for (int i = 0; i < 16; i++) {
+			std::ostringstream ss; ss << "argument" << i;
+			std::string arg_name = ss.str();
+			Value *arg_ref = builder.CreateInBoundsGEP(
+				arg_array, builder.getInt32(i)
+			);
+			scope[arg_name] = make_local(arg_name, arg_ref);
+		}
+	}
+
+	visit(body);
 	builder.CreateRetVoid();
 
 	return function;
@@ -92,11 +163,13 @@ Value *node_codegen::visit_value(value *v) {
 		std::string name(v->t.string.data, v->t.string.length);
 		Value *var = scope.find(name) != scope.end() ? scope[name] : do_lookup(
 			ConstantFP::get(builder.getDoubleTy(), -1),
-			builder.CreateCall(to_string, get_string(v->t.string.length, v->t.string.data))
+			builder.CreateCall(
+				to_string, get_string(v->t.string.length, v->t.string.data)
+			)
 		);
-		Value *indices[] = { builder.getInt32(0), builder.getInt32(2) };
-		Value *ptr = builder.CreateInBoundsGEP(var, indices);
-		return builder.CreateLoad(ptr);
+		return builder.CreateCall3(
+			access, var, builder.getInt16(0), builder.getInt16(0)
+		);
 	}
 
 	case real: return get_real(v->t.real);
@@ -110,7 +183,7 @@ Value *node_codegen::visit_value(value *v) {
 	case kw_local: return get_real(-6);
 
 	case kw_true: return get_real(1);
-	case kw_false: return get_real(0);
+	case kw_false: return get_real(0.0);
 	}
 }
 
@@ -220,17 +293,12 @@ Value *node_codegen::visit_subscript(subscript *s) {
 	}
 	}
 
-	Value *indices[2];
-	size_t i = 2 - s->indices.size();
-	for (size_t j = 0; j < i; j++) {
-		indices[j] = ConstantFP::get(builder.getDoubleTy(), 0);
-	}
-	for (
-		std::vector<expression*>::iterator it = s->indices.begin();
-		it != s->indices.end();
-		++it, ++i
-	) {
-		Value *index = builder.CreateCall(to_real, visit(*it));
+	std::vector<Value*> indices(2, builder.getInt16(0));
+	for (size_t i = 0; i < s->indices.size(); i++) {
+		Value *index = builder.CreateFPToUI(
+			builder.CreateCall(to_real, visit(s->indices[i])),
+			builder.getInt16Ty()
+		);
 		indices[i] = index;
 	}
 
@@ -238,33 +306,32 @@ Value *node_codegen::visit_subscript(subscript *s) {
 }
 
 Value *node_codegen::visit_call(call *c) {
-	std::string name(c->function->t.string.data, c->function->t.string.length);
+	StringRef name(c->function->t.string.data, c->function->t.string.length);
 	bool var = scripts.find(name) != scripts.end();
 
-	Function *function = get_function(
-		name.c_str(), var ? 0 : c->args.size(), var
-	);
+	Function *function = get_function(name, var ? 0 : c->args.size(), var);
 
 	std::vector<Value*> args;
-	args.reserve(c->args.size() + 4);
+	args.reserve(c->args.size() + 5);
 
-	args.push_back(alloc(variant_type));
+	args.push_back(alloc(variant_type, name + "_ret"));
 	args.push_back(self_scope);
 	args.push_back(other_scope);
-	if (var) {
-		args.push_back(
-			ConstantInt::get(IntegerType::get(context, 8), c->args.size())
-		);
-	}
+	if (var) args.push_back(builder.getInt16(c->args.size()));
 
-	for (
-		std::vector<expression*>::iterator it = c->args.begin();
-		it != c->args.end(); ++it
-	) {
-		Value *arg = alloc(variant_type);
-		builder.CreateMemCpy(arg, visit(*it), dl->getTypeStoreSize(variant_type), 0);
-		args.push_back(arg);
+	Value *array = alloc(
+		variant_type, builder.getInt32(c->args.size()), name + "_args"
+	);
+	for (size_t i = 0; i < c->args.size(); i++) {
+		Value *indices[] = { builder.getInt32(i) };
+		Value *arg = builder.CreateInBoundsGEP(array, indices);
+		builder.CreateMemCpy(
+			arg, visit(c->args[i]), dl->getTypeStoreSize(variant_type), 0
+		);
+
+		if (!var) args.push_back(arg);
 	}
+	if (var) args.push_back(array);
 
 	CallInst *call = builder.CreateCall(function, args);
 	call->addAttribute(1, Attribute::StructRet);
@@ -305,22 +372,10 @@ Value *node_codegen::visit_invocation(invocation* i) {
 }
 
 Value *node_codegen::visit_declaration(declaration *d) {
+	// todo: var vs globalvar
 	for (std::vector<value*>::iterator it = d->names.begin(); it != d->names.end(); ++it) {
 		std::string name((*it)->t.string.data, (*it)->t.string.length);
-		scope[name] = alloc(var_type);
-	
-		Value *x = builder.getInt16(1), *xindices[] = { builder.getInt32(0), builder.getInt32(0) };
-		Value *xptr = builder.CreateInBoundsGEP(scope[name], xindices);
-		builder.CreateStore(x, xptr);
-
-		Value *y = builder.getInt16(1), *yindices[] = { builder.getInt32(0), builder.getInt32(1) };
-		Value *yptr = builder.CreateInBoundsGEP(scope[name], yindices);
-		builder.CreateStore(y, yptr);
-
-		Value *variant = alloc(variant_type, name);
-		Value *vindices[] = { builder.getInt32(0), builder.getInt32(2) };
-		Value *vptr = builder.CreateInBoundsGEP(scope[name], vindices);
-		builder.CreateStore(variant, vptr);
+		scope[name] = make_local(name, alloc(variant_type, name));
 	}
 
 	return 0;
@@ -361,19 +416,6 @@ Value *node_codegen::visit_ifstatement(ifstatement *i) {
 	return 0;
 }
 
-namespace {
-	template <typename... types>
-	class save_context {
-	public:
-		save_context(types&... args) : context(args...), data(args...) {}
-		~save_context() { context = data; }
-
-	private:
-		std::tuple<types&...> context;
-		std::tuple<types...> data;
-	};
-}
-
 Value *node_codegen::visit_whilestatement(whilestatement *w) {
 	Function *f = builder.GetInsertBlock()->getParent();
 	BasicBlock *loop = BasicBlock::Create(context, "loop");
@@ -389,7 +431,6 @@ Value *node_codegen::visit_whilestatement(whilestatement *w) {
 	f->getBasicBlockList().push_back(loop);
 	builder.SetInsertPoint(loop);
 	{
-		// this is ugly, wish I could pass args to visit...
 		save_context<BasicBlock*, BasicBlock*> save(current_loop, current_end);
 		current_loop = cond;
 		current_end = after;
@@ -655,7 +696,7 @@ Value *node_codegen::visit_returnstatement(returnstatement *r) {
 	return 0;
 }
 
-Function *node_codegen::get_operator(const char *name, int args) {
+Function *node_codegen::get_operator(const StringRef &name, int args) {
 	Function *function = module.getFunction(name);
 	if (function) return function;
 
@@ -674,21 +715,30 @@ Function *node_codegen::get_operator(const char *name, int args) {
 	return function;
 }
 
-Function *node_codegen::get_function(const char *name, int args, bool var) {
+Function *node_codegen::get_function(const StringRef &name, int args, bool var) {
 	Function *function = module.getFunction(name);
 	if (function) return function;
 
-	std::vector<Type*> vargs(args + (var ? 4 : 3), variant_type->getPointerTo());
+	std::vector<Type*> vargs(
+		args + (var ? 5 : 3), variant_type->getPointerTo()
+	);
 	vargs[1] = vargs[2] = scope_type;
-	if (var) vargs[3] = IntegerType::get(context, 8);
-	FunctionType *type = FunctionType::get(builder.getVoidTy(), vargs, var);
+	if (var) vargs[3] = builder.getInt16Ty();
+
+	FunctionType *type = FunctionType::get(builder.getVoidTy(), vargs, false);
 	function = Function::Create(type, Function::ExternalLinkage, name, &module);
 
 	Function::arg_iterator ai = function->arg_begin();
 	Attribute::AttrKind attrs[] = { Attribute::NoAlias, Attribute::StructRet };
 	ai->addAttr(AttributeSet::get(context, ai->getArgNo() + 1, attrs));
 
-	// TODO: argument#, argument[#], argument_relative
+	ai->setName("out");
+	ai++; ai->setName("self");
+	ai++; ai->setName("other");
+	if (var) {
+		ai++; ai->setName("argc");
+		ai++; ai->setName("argv");
+	}
 
 	return function;
 }
@@ -705,6 +755,23 @@ Value *node_codegen::get_real(double val) {
 	global->setUnnamedAddr(true);
 
 	return builder.CreateBitCast(global, variant_type->getPointerTo());
+}
+
+Value *node_codegen::get_real(Value *val) {
+	Value *variant = alloc(variant_type, "real");
+
+	Value *tindices[] = { builder.getInt32(0), builder.getInt32(0) };
+	Value *type = builder.CreateInBoundsGEP(variant, tindices);
+	builder.CreateStore(builder.getInt8(0), type);
+
+	Value *rindices[] = { builder.getInt32(0), builder.getInt32(1) };
+	Value *real = builder.CreateBitCast(
+		builder.CreateInBoundsGEP(variant, rindices),
+		builder.getDoubleTy()->getPointerTo()
+	);
+	builder.CreateStore(val, real);
+
+	return variant;
 }
 
 Value *node_codegen::get_string(int length, const char *data) {
@@ -748,8 +815,28 @@ Value *node_codegen::is_equal(Value *a, Value *b) {
 	return builder.CreateFCmpUGT(expr, ConstantFP::get(builder.getDoubleTy(), 0.5));
 }
 
-AllocaInst *node_codegen::alloc(Type *type, const Twine &name) {
-	return new AllocaInst(type, 0, name, alloca_point);
+Value *node_codegen::make_local(const std::string &name, Value *value) {
+	return make_local(name, builder.getInt16(1), builder.getInt16(1), value);
+}
+
+Value *node_codegen::make_local(
+	const std::string &name, Value *x, Value *y, Value *values
+) {
+	Value *l = alloc(var_type, name);
+
+	Value *xindices[] = { builder.getInt32(0), builder.getInt32(0) };
+	Value *xptr = builder.CreateInBoundsGEP(l, xindices);
+	builder.CreateStore(x, xptr);
+
+	Value *yindices[] = { builder.getInt32(0), builder.getInt32(1) };
+	Value *yptr = builder.CreateInBoundsGEP(l, yindices);
+	builder.CreateStore(y, yptr);
+
+	Value *vindices[] = { builder.getInt32(0), builder.getInt32(2) };
+	Value *vptr = builder.CreateInBoundsGEP(l, vindices);
+	builder.CreateStore(values, vptr);
+
+	return l;
 }
 
 Value *node_codegen::do_lookup(Value *left, Value *right) {
