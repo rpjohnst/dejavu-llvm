@@ -15,7 +15,9 @@ What DejaVu is currently capable of:
 * Linking with a barebones GML runtime library
 
 What's next:
-* Finalizing the calling convention for script arguments
+* Cleaning up string and array allocation and collection
+* Dealing with object-local, global, and globalvar scopes; `with` statements
+* Object-local accessors like `direction`/`speed` and `hspeed`/`vspeed`
 * Exporting executables using a system linker (ideally LLVM's LLD, but until it supports more executable formats it will be the system linker)
 * Writing game assets into the executable
 * The GML standard library and game engine
