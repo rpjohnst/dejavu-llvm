@@ -1,13 +1,17 @@
 # top-level commands
 
-TARGETS := dejavu.jar dejavu.so runtime.bc
+TARGETS := dejavu.jar dejavu.so runtime.bc t
 
 .PHONY: all
-all: $(TARGETS)
+all: $(TARGETS) test
+
+.PHONY: test
+test: t
+	./t
 
 .PHONY: clean
 clean:
-	$(RM) $(TARGETS) $(interface_OBJECTS) $(interface_DEPENDS) $(library_OBJECTS) $(library_DEPENDS) $(runtime_OBJECTS) $(runtime_DEPENDS)
+	$(RM) $(TARGETS) $(interface_OBJECTS) $(interface_DEPENDS) $(library_OBJECTS) $(library_DEPENDS) $(runtime_OBJECTS) $(runtime_DEPENDS) $(t_OBJECTS) $(t_DEPENDS)
 	(cd plugin && ant clean)
 
 # toolchain configuration
@@ -63,8 +67,22 @@ runtime.bc: $(runtime_OBJECTS)
 %.bc: %.cc
 	$(CXX) -c -emit-llvm -std=c++11 -Iinclude $(DEPFLAGS) $(CXXFLAGS) -o $@ $<
 
+# build the tests
+
+t_SOURCES := $(shell find test -name '*.cc')
+t_OBJECTS := $(t_SOURCES:.cc=.o)
+t_DEPENDS := $(t_SOURCES:.cc=.d)
+
+t_LDLIBS := -lgtest -lgtest_main
+
+test/%.o: test/%.cc
+	$(CXX) -c -std=c++11 -Iinclude -MMD -MP $(CXXFLAGS) $(t_CXXFLAGS) $(t_CPPFLAGS) -o $@ $<
+
+t: $(t_OBJECTS)
+	$(CXX) $(t_LDFLAGS) -o $@ $^ $(t_LDLIBS)
+
 # include dependencies
 
 ifeq ($(filter clean, $(MAKECMDGOALS)),)
--include $(interface_DEPENDS) $(library_DEPENDS) $(runtime_DEPENDS)
+-include $(interface_DEPENDS) $(library_DEPENDS) $(runtime_DEPENDS) $(t_DEPENDS)
 endif
