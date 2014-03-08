@@ -57,7 +57,7 @@ dejavu.so: $(library_OBJECTS)
 
 # build the runtime
 
-runtime_SOURCES := $(shell find runtime -name '*.cc')
+runtime_SOURCES := $(shell find runtime system -name '*.cc')
 runtime_OBJECTS := $(runtime_SOURCES:.cc=.bc)
 runtime_DEPENDS := $(runtime_SOURCES:.cc=.d)
 
@@ -69,7 +69,7 @@ runtime.bc: $(runtime_OBJECTS)
 
 # build the tests
 
-t_SOURCES := $(shell find test -name '*.cc')
+t_SOURCES := $(shell find system test -name '*.cc')
 t_OBJECTS := $(t_SOURCES:.cc=.o)
 t_DEPENDS := $(t_SOURCES:.cc=.d)
 

@@ -28,6 +28,36 @@ TEST(table, insert) {
 	EXPECT_EQ(3, t.find(7)->v);
 }
 
+TEST(table, duplicate) {
+	table<int, int> t;
+
+	t[0] = 1;
+	t[1] = 1;
+	t[0] = 2;
+
+	EXPECT_EQ(2, t.size());
+}
+
+TEST(table, remove) {
+	table<int, int> t(3);
+
+	t.insert(0) = 1;
+	t.insert(3) = 2;
+	t.insert(2) = 3;
+
+	t.remove(2);
+	EXPECT_EQ(t.end(), t.find(2));
+	EXPECT_EQ(1, t.find(0)->v);
+	EXPECT_EQ(2, t.find(3)->v);
+
+	t.remove(0);
+	EXPECT_EQ(t.end(), t.find(0));
+	EXPECT_EQ(2, t.find(3)->v);
+
+	t.remove(3);
+	EXPECT_EQ(t.end(), t.find(3));
+}
+
 TEST(table, resize) {
 	table<int, int> t(1);
 
