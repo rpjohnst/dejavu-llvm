@@ -13,10 +13,13 @@ What DejaVu is currently capable of:
 * Getting game data from [LateralGM](http://lateralgm.org) through a plugin
 * Compiling GML and D&D actions in scripts and object events using LLVM
 * Linking with a barebones GML runtime library
+    - Var type with real, string, and arrays
+    - Immutable, refcounted, interned strings
+    - local, self, other, and global scope lookup
 
 What's next:
-* Cleaning up string and array allocation and collection
-* Dealing with object-local, global, and globalvar scopes; `with` statements
+* Array resize and memory management
+* Dealing with object-local, object-id, global, and globalvar scopes; `with` statements
 * Object-local accessors like `direction`/`speed` and `hspeed`/`vspeed`
 * Exporting executables using a system linker (ideally LLVM's LLD, but until it supports more executable formats it will be the system linker)
 * Writing game assets into the executable
