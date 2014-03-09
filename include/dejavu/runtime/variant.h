@@ -1,35 +1,23 @@
 #ifndef RUNTIME_VARIANT_H
 #define RUNTIME_VARIANT_H
 
-#include <cstring>
+#include <dejavu/system/string.h>
 
-struct string {
-	string() = default;
-
-	template <int l>
-	string(const char (&d)[l]) : length(l), data(d) {}
-
-	size_t length;
-	const char *data;
-};
-
-inline bool operator==(string a, string b) {
-	return a.length == b.length && memcmp((void*)a.data, (void*)b.data, a.length) == 0;
-}
+extern string_pool strings;
 
 struct variant {
 	variant() = default;
 
 	variant(double r) : type(0), real(r) {}
-	variant(string s) : type(1), string(s) {}
+	variant(string *s) : type(1), string(s) {}
 
-	template <int l>
-	variant(const char (&d)[l]) : type(1), string(d) {}
+	variant(const char *s) : variant(strings.intern(s)) {}
 
+	// todo: remove magic numbers
 	unsigned char type;
 	union {
 		double real;
-		string string;
+		string *string;
 	};
 };
 
@@ -40,7 +28,17 @@ struct var {
 
 extern "C" {
 	double to_real(variant a);
-	string to_string(variant a);
+	string *to_string(variant a);
+
+	string *intern(string *s);
+
+	variant *access(var *a, unsigned short x, unsigned short y);
+
+	void retain(variant *a);
+	void release(variant *a);
+
+	void retain_var(var *a);
+	void release_var(var *a);
 }
 
 #endif

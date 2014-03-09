@@ -6,6 +6,7 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
+#include <llvm/ADT/StringMap.h>
 #include <unordered_map>
 #include <unordered_set>
 #include <string>
@@ -49,19 +50,19 @@ public:
 	llvm::Value *visit_casestatement(casestatement *c);
 
 private:
-	llvm::Function *get_function(const llvm::StringRef &name, int args, bool var);
-	llvm::Function *get_operator(const llvm::StringRef &name, int args);
+	llvm::Function *get_function(llvm::StringRef name, int args, bool var);
+	llvm::Function *get_operator(llvm::StringRef name, int args);
 
 	llvm::Value *get_real(double val);
 	llvm::Value *get_real(llvm::Value *val);
+	llvm::Value *get_string(llvm::StringRef val);
 
-	llvm::Value *get_string(int length, const char *val);
 	llvm::Value *to_bool(node *val);
 	llvm::Value *is_equal(llvm::Value *a, llvm::Value *b);
 
-	llvm::Value *make_local(const std::string &name, llvm::Value *value);
+	llvm::Value *make_local(llvm::StringRef name, llvm::Value *value);
 	llvm::Value *make_local(
-		const std::string &name, llvm::Value *x, llvm::Value *y,
+		llvm::StringRef name, llvm::Value *x, llvm::Value *y,
 		llvm::Value *values
 	);
 
@@ -75,12 +76,15 @@ private:
 	llvm::Module module;
 	const llvm::DataLayout *dl;
 
+	llvm::StringMap<llvm::GlobalVariable*> string_literals;
+	std::unordered_set<std::string> scripts;
+
 	// runtime types
 	llvm::PointerType *scope_type;
 	llvm::StructType *var_type;
 	llvm::StructType *variant_type;
 	llvm::Type *real_type;
-	llvm::StructType *string_type;
+	llvm::Type *string_type;
 	int union_diff;
 
 	// runtime functions
@@ -90,11 +94,15 @@ private:
 	llvm::Function *lookup;
 	llvm::Function *access;
 
+	llvm::Function *retain;
+	llvm::Function *release;
+	llvm::Function *retain_var;
+	llvm::Function *release_var;
+
 	llvm::Function *with_begin;
 	llvm::Function *with_inc;
 
 	// scope handling
-	std::unordered_set<std::string> scripts;
 	std::unordered_map<std::string, llvm::Value*> scope;
 	llvm::Instruction *alloca_point = 0;
 	llvm::Value *return_value = 0;

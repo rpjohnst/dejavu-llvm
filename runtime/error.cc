@@ -8,11 +8,11 @@ struct scope;
 extern "C" variant show_error(
 	scope *, scope *, variant msg, variant abort
 ) {
-	string error = to_string(msg);
+	string *error = to_string(msg);
 	fputs("error: ", stderr);
-	fwrite(error.data, 1, error.length, stderr);
+	fwrite(error->data, 1, error->length, stderr);
 	fputs("\n", stderr);
 
 	if (to_real(abort)) exit(1);
-	return 0;
+	return 0.0;
 }

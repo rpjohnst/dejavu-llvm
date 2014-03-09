@@ -9,10 +9,55 @@ extern "C" double to_real(variant a) {
 	}
 }
 
-extern "C" string to_string(variant a) {
+extern "C" string *to_string(variant a) {
 	switch (a.type) {
 	case 1: return a.string;
-	default: show_error(0, 0, "expected a string", true); return string();
+	default: show_error(0, 0, "expected a string", true); return nullptr;
+	}
+}
+
+// todo: resizing
+extern "C" variant *access(var *a, unsigned short x, unsigned short y) {
+	if (x >= a->x) {
+		show_error(0, 0, "index out of bounds", true);
+		return 0;
+	}
+
+	if (y >= a->y) {
+		show_error(0, 0, "index out of bounds", true);
+		return 0;
+	}
+
+	return &a->contents[x + y * a->x];
+}
+
+extern "C" void retain(variant *a) {
+	switch (a->type) {
+	case 1: a->string->retain(); break;
+	}
+}
+
+extern "C" void release(variant *a) {
+	switch (a->type) {
+	case 1: a->string->release(); break;
+	}
+}
+
+extern "C" void retain_var(var *a) {
+	for (size_t y = 0; y < a->y; y++) {
+		for (size_t x = 0; x < a->x; x++) {
+			variant *v = access(a, x, y);
+			retain(v);
+		}
+	}
+}
+
+extern "C" void release_var(var *a) {
+	for (size_t y = 0; y < a->y; y++) {
+		for (size_t x = 0; x < a->x; x++) {
+			variant *v = access(a, x, y);
+			release(v);
+		}
 	}
 }
 
@@ -86,12 +131,17 @@ BINARY_OP_DEFAULT(greater, >)
 
 BINARY_OP(plus_real_real) { return a.real + b.real; }
 BINARY_OP(plus_string_string) {
-	// todo: reference counting? over-copying?
-	string ret;
-	ret.length = a.string.length + b.string.length;
-	ret.data = new char[ret.length];
-	memcpy((void*)ret.data, (void*)a.string.data, a.string.length);
-	memcpy((void*)(ret.data + a.string.length), (void*)b.string.data, b.string.length);
+	size_t length = a.string->length + b.string->length;
+	string *str = new (length) string(length);
+	str->retain();
+
+	memcpy((void*)str->data, (void*)a.string->data, a.string->length);
+	memcpy((void*)(str->data + a.string->length), (void*)b.string->data, b.string->length);
+	str->hash = string::compute_hash(str->length, str->data);
+
+	string *ret = strings.intern(str);
+	ret->retain();
+	str->release();
 	return ret;
 }
 BINARY_ERROR(plus, +)

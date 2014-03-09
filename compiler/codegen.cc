@@ -1,4 +1,5 @@
-#include "dejavu/compiler/codegen.h"
+#include <dejavu/compiler/codegen.h>
+#include <dejavu/system/string.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DataLayout.h>
@@ -12,8 +13,17 @@ node_codegen::node_codegen(const DataLayout *dl, error_stream &e)
 
 	real_type = builder.getDoubleTy();
 
-	Type *string[] = { builder.getInt32Ty(), builder.getInt8PtrTy() };
-	string_type = StructType::create(string, "struct.string");
+	Type *size_type = builder.getIntPtrTy(dl);
+
+	// todo: load these from runtime.bc
+	Type *string[] = {
+		size_type, // refcount
+		builder.getInt8PtrTy(), // pool
+		size_type, // hash
+		size_type, // length
+		ArrayType::get(builder.getInt8Ty(), 0)
+	};
+	string_type = StructType::create(string, "struct.string")->getPointerTo();
 
 	union_diff =
 		dl->getTypeAllocSize(real_type) - dl->getTypeAllocSize(string_type);
@@ -32,24 +42,6 @@ node_codegen::node_codegen(const DataLayout *dl, error_stream &e)
 
 	// runtime functions
 	// todo: put these in a library like the GML standard library
-	Type *lookup_args[] = { scope_type, scope_type, real_type, string_type };
-	FunctionType *lookup_type = FunctionType::get(
-		var_type->getPointerTo(), lookup_args, false
-	);
-	lookup = Function::Create(
-		lookup_type, Function::ExternalLinkage, "lookup", &module
-	);
-
-	Type *access_args[] = {
-		var_type->getPointerTo(), builder.getInt16Ty(), builder.getInt16Ty()
-	};
-	FunctionType *access_type = FunctionType::get(
-		variant_type->getPointerTo(), access_args, false
-	);
-	access = Function::Create(
-		access_type, Function::ExternalLinkage, "access", &module
-	);
-
 	FunctionType *to_real_type = FunctionType::get(
 		real_type, variant_type->getPointerTo(), false
 	);
@@ -62,6 +54,56 @@ node_codegen::node_codegen(const DataLayout *dl, error_stream &e)
 	);
 	to_string = Function::Create(
 		to_str_type, Function::ExternalLinkage, "to_string", &module
+	);
+
+	Type *access_args[] = {
+		var_type->getPointerTo(), builder.getInt16Ty(), builder.getInt16Ty()
+	};
+	FunctionType *access_type = FunctionType::get(
+		variant_type->getPointerTo(), access_args, false
+	);
+	access = Function::Create(
+		access_type, Function::ExternalLinkage, "access", &module
+	);
+
+	Type *retain_args[] = { variant_type->getPointerTo() };
+	FunctionType *retain_type = FunctionType::get(
+		builder.getVoidTy(), retain_args, false
+	);
+	retain = Function::Create(
+		retain_type, Function::ExternalLinkage, "retain", &module
+	);
+
+	Type *release_args[] = { variant_type->getPointerTo() };
+	FunctionType *release_type = FunctionType::get(
+		builder.getVoidTy(), release_args, false
+	);
+	release = Function::Create(
+		release_type, Function::ExternalLinkage, "release", &module
+	);
+
+	Type *retain_var_args[] = { var_type->getPointerTo() };
+	FunctionType *retain_var_type = FunctionType::get(
+		builder.getVoidTy(), retain_var_args, false
+	);
+	retain_var = Function::Create(
+		retain_var_type, Function::ExternalLinkage, "retain_var", &module
+	);
+
+	Type *release_var_args[] = { var_type->getPointerTo() };
+	FunctionType *release_var_type = FunctionType::get(
+		builder.getVoidTy(), release_var_args, false
+	);
+	release_var = Function::Create(
+		release_var_type, Function::ExternalLinkage, "release_var", &module
+	);
+
+	Type *lookup_args[] = { scope_type, scope_type, real_type, string_type };
+	FunctionType *lookup_type = FunctionType::get(
+		var_type->getPointerTo(), lookup_args, false
+	);
+	lookup = Function::Create(
+		lookup_type, Function::ExternalLinkage, "lookup", &module
 	);
 
 	// todo: should there be a separate with_iterator type?
@@ -150,6 +192,14 @@ Function *node_codegen::add_function(
 	}
 
 	visit(body);
+
+	for (
+		std::unordered_map<std::string, Value*>::iterator it = scope.begin();
+		it != scope.end(); ++it
+	) {
+		builder.CreateCall(release_var, it->second);
+	}
+
 	builder.CreateRetVoid();
 
 	return function;
@@ -159,12 +209,13 @@ Value *node_codegen::visit_value(value *v) {
 	switch (v->t.type) {
 	default: return 0;
 
-	case name: {
+	case v_name: {
 		std::string name(v->t.string.data, v->t.string.length);
 		Value *var = scope.find(name) != scope.end() ? scope[name] : do_lookup(
 			ConstantFP::get(builder.getDoubleTy(), -1),
 			builder.CreateCall(
-				to_string, get_string(v->t.string.length, v->t.string.data)
+				to_string,
+				get_string(StringRef(v->t.string.data, v->t.string.length))
 			)
 		);
 		return builder.CreateCall3(
@@ -172,8 +223,9 @@ Value *node_codegen::visit_value(value *v) {
 		);
 	}
 
-	case real: return get_real(v->t.real);
-	case string: return get_string(v->t.string.length, v->t.string.data);
+	case v_real: return get_real(v->t.real);
+	case v_string:
+		return get_string(StringRef(v->t.string.data, v->t.string.length));
 
 	case kw_self: return get_real(-1);
 	case kw_other: return get_real(-2);
@@ -217,7 +269,10 @@ Value *node_codegen::visit_binary(binary *b) {
 		token &name = static_cast<value*>(b->right)->t;
 		Value *var = do_lookup(
 			builder.CreateCall(to_real, visit(b->left)),
-			builder.CreateCall(to_string, get_string(name.string.length, name.string.data))
+			builder.CreateCall(
+				to_string,
+				get_string(StringRef(name.string.data, name.string.length))
+			)
 		);
 		Value *indices[] = { builder.getInt32(0), builder.getInt32(2) };
 		Value *ptr = builder.CreateInBoundsGEP(var, indices);
@@ -277,7 +332,10 @@ Value *node_codegen::visit_subscript(subscript *s) {
 		std::string name(v->t.string.data, v->t.string.length);
 		var = scope.find(name) != scope.end() ? scope[name] : do_lookup(
 			ConstantFP::get(builder.getDoubleTy(), -1),
-			builder.CreateCall(to_string, get_string(v->t.string.length, v->t.string.data))
+			builder.CreateCall(
+				to_string,
+				get_string(StringRef(v->t.string.data, v->t.string.length))
+			)
 		);
 		break;
 	}
@@ -287,7 +345,10 @@ Value *node_codegen::visit_subscript(subscript *s) {
 		token &name = static_cast<value*>(left->right)->t;
 		var = do_lookup(
 			builder.CreateCall(to_real, visit(left->left)),
-			builder.CreateCall(to_string, get_string(name.string.length, name.string.data))
+			builder.CreateCall(
+				to_string,
+				get_string(StringRef(name.string.data, name.string.length))
+			)
 		);
 		break;
 	}
@@ -360,9 +421,10 @@ Value *node_codegen::visit_assignment(assignment *a) {
 		r = visit_binary(&b);
 	}
 
-	builder.CreateMemCpy(
-		visit(a->lvalue), r, dl->getTypeStoreSize(variant_type), 0
-	);
+	Value *l = visit(a->lvalue);
+	builder.CreateCall(release, l);
+	builder.CreateMemCpy(l, r, dl->getTypeStoreSize(variant_type), 0);
+	builder.CreateCall(retain, l);
 	return 0;
 }
 
@@ -395,9 +457,7 @@ Value *node_codegen::visit_ifstatement(ifstatement *i) {
 	BasicBlock *branch_false = BasicBlock::Create(context, "else");
 	BasicBlock *merge = BasicBlock::Create(context, "merge");
 
-	Value *expr = builder.CreateCall(to_real, visit(i->cond));
-	Value *cond = builder.CreateFCmpUGT(expr, ConstantFP::get(builder.getDoubleTy(), 0.5));
-	builder.CreateCondBr(cond, branch_true, branch_false);
+	builder.CreateCondBr(to_bool(i->cond), branch_true, branch_false);
 
 	f->getBasicBlockList().push_back(branch_true);
 	builder.SetInsertPoint(branch_true);
@@ -696,7 +756,7 @@ Value *node_codegen::visit_returnstatement(returnstatement *r) {
 	return 0;
 }
 
-Function *node_codegen::get_operator(const StringRef &name, int args) {
+Function *node_codegen::get_operator(StringRef name, int args) {
 	Function *function = module.getFunction(name);
 	if (function) return function;
 
@@ -715,7 +775,7 @@ Function *node_codegen::get_operator(const StringRef &name, int args) {
 	return function;
 }
 
-Function *node_codegen::get_function(const StringRef &name, int args, bool var) {
+Function *node_codegen::get_function(StringRef name, int args, bool var) {
 	Function *function = module.getFunction(name);
 	if (function) return function;
 
@@ -746,11 +806,13 @@ Function *node_codegen::get_function(const StringRef &name, int args, bool var) 
 Value *node_codegen::get_real(double val) {
 	Constant *contents[] = {
 		builder.getInt8(0), ConstantFP::get(builder.getDoubleTy(), val),
-		UndefValue::get(ArrayType::get(builder.getInt8Ty(), union_diff < 0 ? -union_diff : 0))
+		UndefValue::get(ArrayType::get(
+			builder.getInt8Ty(), std::max(-union_diff, 0)
+		))
 	};
 	Constant *variant = ConstantStruct::getAnon(contents);
 	GlobalVariable *global = new GlobalVariable(
-		module, variant->getType(), true, GlobalValue::InternalLinkage, variant, "real"
+		module, variant->getType(), true, GlobalValue::InternalLinkage, variant
 	);
 	global->setUnnamedAddr(true);
 
@@ -774,34 +836,44 @@ Value *node_codegen::get_real(Value *val) {
 	return variant;
 }
 
-Value *node_codegen::get_string(int length, const char *data) {
-	Constant *array = ConstantDataArray::getString(
-		context, StringRef(data, length), false
-	);
-	GlobalVariable *str = new GlobalVariable(
-		module, array->getType(), true, GlobalValue::InternalLinkage, array, ".str"
-	);
-	str->setUnnamedAddr(true);
+Value *node_codegen::get_string(StringRef val) {
+	GlobalVariable *string;
+	if (string_literals.find(val) != string_literals.end()) {
+		string = string_literals[val];
+	}
+	else {
+		Type *size_type = builder.getIntPtrTy(dl);
 
-	Value *indices[] = { builder.getInt32(0), builder.getInt32(0) };
-	Constant *string[] = {
-		builder.getInt32(length), cast<Constant>(builder.CreateInBoundsGEP(str, indices))
-	};
+		Constant *contents[] = {
+			ConstantInt::get(size_type, 1, false), // refcount
+			ConstantPointerNull::get(builder.getInt8PtrTy()), // pool
+			ConstantInt::get( // hash
+				size_type, string::compute_hash(val.size(), val.data()), false
+			),
+			ConstantInt::get(size_type, val.size()), // length
+			ConstantDataArray::getString(context, val, false) // data
+		};
+		Constant *s = ConstantStruct::getAnon(contents);
+		string = new GlobalVariable(
+			module, s->getType(), false, GlobalValue::PrivateLinkage, s
+		);
+		string_literals[val] = string;
+	}
 
 	Constant *contents[] = {
-		builder.getInt8(1), ConstantStruct::get(string_type, ArrayRef<Constant*>(string)),
-		UndefValue::get(ArrayType::get(builder.getInt8Ty(), union_diff > 0 ? union_diff : 0))
+		builder.getInt8(1), string,
+		UndefValue::get(ArrayType::get(
+			builder.getInt8Ty(), std::max(union_diff, 0)
+		))
 	};
 	Constant *variant = ConstantStruct::getAnon(contents);
 	GlobalVariable *global = new GlobalVariable(
-		module, variant->getType(), true, GlobalValue::InternalLinkage, variant, "string"
+		module, variant->getType(), true, GlobalValue::InternalLinkage, variant
 	);
 	global->setUnnamedAddr(true);
 
 	return builder.CreateBitCast(global, variant_type->getPointerTo());
 }
-
-// todo: combine these next two
 
 Value *node_codegen::to_bool(node *cond) {
 	Value *expr = builder.CreateCall(to_real, visit(cond));
@@ -815,12 +887,12 @@ Value *node_codegen::is_equal(Value *a, Value *b) {
 	return builder.CreateFCmpUGT(expr, ConstantFP::get(builder.getDoubleTy(), 0.5));
 }
 
-Value *node_codegen::make_local(const std::string &name, Value *value) {
+Value *node_codegen::make_local(StringRef name, Value *value) {
 	return make_local(name, builder.getInt16(1), builder.getInt16(1), value);
 }
 
 Value *node_codegen::make_local(
-	const std::string &name, Value *x, Value *y, Value *values
+	StringRef name, Value *x, Value *y, Value *values
 ) {
 	Value *l = alloc(var_type, name);
 
@@ -835,6 +907,8 @@ Value *node_codegen::make_local(
 	Value *vindices[] = { builder.getInt32(0), builder.getInt32(2) };
 	Value *vptr = builder.CreateInBoundsGEP(l, vindices);
 	builder.CreateStore(values, vptr);
+
+	builder.CreateCall(retain_var, l);
 
 	return l;
 }
