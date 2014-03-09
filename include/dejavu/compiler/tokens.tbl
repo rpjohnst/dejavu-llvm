@@ -13,9 +13,9 @@
 TOK(eof)
 TOK(unexpected)
 
-TOK(name)
-TOK(real)
-TOK(string)
+TOK(v_name)
+TOK(v_real)
+TOK(v_string)
 
 OPERATOR(l_brace, "{")
 OPERATOR(r_brace, "}")

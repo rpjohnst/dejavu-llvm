@@ -171,7 +171,7 @@ void token_stream::skipnewline() {
 // returns the name or keyword at the current position
 // if there is none, behavior is undefined
 token token_stream::getname() {
-	token t(name, row, col);
+	token t(v_name, row, col);
 	t.string.data = current;
 
 	do {
@@ -287,7 +287,7 @@ token token_stream::getoperator() {
 // returns the number at the current position
 // if there is none, behavior is undefined
 token token_stream::getnumber() {
-	token t(real, row, col);
+	token t(v_real, row, col);
 
 	char *end;
 	if (*current == '$')
@@ -305,7 +305,7 @@ token token_stream::getnumber() {
 // GML makes this easy without escape sequences but we'll want them later
 // todo: error on unterminated strings
 token token_stream::getstring() {
-	token t(string, row, col);
+	token t(v_string, row, col);
 
 	char delim = *current++;
 	col += 1;
@@ -337,9 +337,12 @@ std::ostream &operator <<(std::ostream &o, token_type t) {
 
 std::ostream &operator <<(std::ostream &o, const token& t) {
 	switch (t.type) {
-	case real: return o << t.real;
-	case unexpected: case name: return o.write(t.string.data, t.string.length);
-	case string: o << '"'; o.write(t.string.data, t.string.length); return o << '"';
+	case v_real:
+		return o << t.real;
+	case v_name: case unexpected:
+		return o.write(t.string.data, t.string.length);
+	case v_string:
+		o << '"'; o.write(t.string.data, t.string.length); return o << '"';
 
 #	define KEYWORD(X) case kw_ ## X: return o << #X;
 #	define OPERATOR(X, Y) case X: return o << Y;

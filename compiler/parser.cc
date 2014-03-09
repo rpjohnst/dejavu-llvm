@@ -52,12 +52,12 @@ expression *parser::getexpression(int prec) {
 		// fixme: is there a better way for led_parsers to reject ts and lefts?
 		if (
 			current.type == l_paren &&
-			!(left->type == value_node && static_cast<value*>(left)->t.type == name)
+			!(left->type == value_node && static_cast<value*>(left)->t.type == v_name)
 		)
 			break;
 		if (
 			current.type == l_square &&
-			!(left->type == value_node && static_cast<value*>(left)->t.type == name) &&
+			!(left->type == value_node && static_cast<value*>(left)->t.type == v_name) &&
 			!(left->type == binary_node && static_cast<binary*>(left)->op == dot)
 		)
 			break;
@@ -102,8 +102,8 @@ expression *parser::infix_led(token t, expression *left) {
 }
 
 expression *parser::dot_led(token t, expression *left) {
-	token n = advance(name);
-	if (n.type != name) return new (allocator) expression_error;
+	token n = advance(v_name);
+	if (n.type != v_name) return new (allocator) expression_error;
 
 	return new (allocator) binary(t.type, left, (this->*symbols[n.type].nud)(n));
 }
@@ -195,8 +195,8 @@ statement *parser::var_std() {
 
 	std::vector<value*> names;
 	while (current.type != semicolon && current.type != eof) {
-		token n = advance(name);
-		if (n.type != name) return new (allocator) declaration(t, names);
+		token n = advance(v_name);
+		if (n.type != v_name) return new (allocator) declaration(t, names);
 
 		names.push_back((value*)(this->*symbols[n.type].nud)(n));
 
@@ -377,12 +377,12 @@ void symbol_table::infix(token_type t, int prec, led_parser led) {
 }
 
 symbol_table::symbol_table() {
-	symbols[real].nud = symbols[string].nud =
+	symbols[v_real].nud = symbols[v_string].nud =
 	symbols[kw_self].nud = symbols[kw_other].nud =
 	symbols[kw_all].nud = symbols[kw_noone].nud =
 	symbols[kw_global].nud = symbols[kw_local].nud =
 	symbols[kw_true].nud = symbols[kw_false].nud =
-	symbols[name].nud = &parser::id_nud;
+	symbols[v_name].nud = &parser::id_nud;
 
 	infix(dot, 90, &parser::dot_led);
 
@@ -426,7 +426,7 @@ symbol_table::symbol_table() {
 	symbols[kw_var].std = symbols[kw_globalvar].std =
 	&parser::var_std;
 
-	symbols[name].std = symbols[l_paren].std =
+	symbols[v_name].std = symbols[l_paren].std =
 	symbols[kw_self].std = symbols[kw_other].std =
 	symbols[kw_all].std = symbols[kw_noone].std =
 	symbols[kw_global].std = symbols[kw_local].std =

@@ -8,15 +8,15 @@ void print_token(const token& t) {
 		printf("%.*s", (int)t.string.length, t.string.data);
 		break;
 
-	case name:
+	case v_name:
 		printf("%.*s", (int)t.string.length, t.string.data);
 		break;
 
-	case real:
+	case v_real:
 		printf("%g", t.real);
 		break;
 
-	case string:
+	case v_string:
 		printf("\"%.*s\"", (int)t.string.length, t.string.data);
 		break;
 
@@ -35,9 +35,9 @@ void node_printer::visit_expression_error(expression_error*) {
 }
 
 void node_printer::visit_value(value *v) {
-	if (precedence >= 80 && v->t.type == real) printf("(");
+	if (precedence >= 80 && v->t.type == v_real) printf("(");
 	print_token(v->t);
-	if (precedence >= 80 && v->t.type == real) printf(")");
+	if (precedence >= 80 && v->t.type == v_real) printf(")");
 }
 
 void node_printer::visit_unary(unary *u) {
