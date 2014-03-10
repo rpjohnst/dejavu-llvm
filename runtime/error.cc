@@ -6,7 +6,7 @@
 struct scope;
 
 extern "C" variant show_error(
-	scope *, scope *, variant msg, variant abort
+	scope *, scope *, const variant &msg, const variant &abort
 ) {
 	string *error = to_string(msg);
 	fputs("error: ", stderr);

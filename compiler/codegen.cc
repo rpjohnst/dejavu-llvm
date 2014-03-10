@@ -16,6 +16,8 @@ node_codegen::node_codegen(const DataLayout *dl, error_stream &e)
 	Type *size_type = builder.getIntPtrTy(dl);
 
 	// todo: load these from runtime.bc
+	// todo: create a gml calling convention for the runtime
+
 	Type *string[] = {
 		size_type, // refcount
 		builder.getInt8PtrTy(), // pool
@@ -155,8 +157,7 @@ Function *node_codegen::add_function(
 	// this is not reentrant. it would need to save the state of:
 	// return, scopes, insertion point, and symbol table
 	Function::arg_iterator ai = function->arg_begin();
-	return_value = ai;
-	self_scope = ++ai;
+	self_scope = ai;
 	other_scope = ++ai;
 
 	BasicBlock *entry = BasicBlock::Create(context);
@@ -165,6 +166,8 @@ Function *node_codegen::add_function(
 	alloca_point = new BitCastInst(
 		builder.getInt32(0), builder.getInt32Ty(), "alloca", entry
 	);
+
+	return_value = alloc(variant_type);
 
 	function->getBasicBlockList().push_back(entry);
 	builder.SetInsertPoint(entry);
@@ -180,15 +183,7 @@ Function *node_codegen::add_function(
 			"argument", arg_count, builder.getInt16(1), arg_array
 		);
 
-		// todo: accessors for bounds checking (also needed for builtin locals)
-		for (int i = 0; i < 16; i++) {
-			std::ostringstream ss; ss << "argument" << i;
-			std::string arg_name = ss.str();
-			Value *arg_ref = builder.CreateInBoundsGEP(
-				arg_array, builder.getInt32(i)
-			);
-			scope[arg_name] = make_local(arg_name, arg_ref);
-		}
+		// todo: accessors for argument# (also for builtin locals)
 	}
 
 	visit(body);
@@ -200,7 +195,8 @@ Function *node_codegen::add_function(
 		builder.CreateCall(release_var, it->second);
 	}
 
-	builder.CreateRetVoid();
+	Value *ret = builder.CreateLoad(return_value);
+	builder.CreateRet(ret);
 
 	return function;
 }
@@ -253,10 +249,9 @@ Value *node_codegen::visit_unary(unary *u) {
 	Value *operand = alloc(variant_type);
 	builder.CreateMemCpy(operand, visit(u->right), dl->getTypeStoreSize(variant_type), 0);
 
-	CallInst *call = builder.CreateCall2(get_operator(name, 1), result, operand);
-	call->addAttribute(1, Attribute::StructRet);
-	call->addAttribute(2, Attribute::ByVal);
+	CallInst *call = builder.CreateCall(get_operator(name, 1), operand);
 
+	builder.CreateStore(call, result);
 	return result;
 }
 
@@ -274,9 +269,9 @@ Value *node_codegen::visit_binary(binary *b) {
 				get_string(StringRef(name.string.data, name.string.length))
 			)
 		);
-		Value *indices[] = { builder.getInt32(0), builder.getInt32(2) };
-		Value *ptr = builder.CreateInBoundsGEP(var, indices);
-		return builder.CreateLoad(ptr);
+		return builder.CreateCall3(
+			access, var, builder.getInt16(0), builder.getInt16(0)
+		);
 	}
 
 	// todo: can we pull this out of a table instead of copypasting?
@@ -312,11 +307,9 @@ Value *node_codegen::visit_binary(binary *b) {
 	builder.CreateMemCpy(left, visit(b->left), dl->getTypeStoreSize(variant_type), 0);
 	builder.CreateMemCpy(right, visit(b->right), dl->getTypeStoreSize(variant_type), 0);
 
-	CallInst *call = builder.CreateCall3(get_operator(name, 2), result, left, right);
-	call->addAttribute(1, Attribute::StructRet);
-	call->addAttribute(2, Attribute::ByVal);
-	call->addAttribute(3, Attribute::ByVal);
+	CallInst *call = builder.CreateCall2(get_operator(name, 2), left, right);
 
+	builder.CreateStore(call, result);
 	return result;
 }
 
@@ -373,9 +366,11 @@ Value *node_codegen::visit_call(call *c) {
 	Function *function = get_function(name, var ? 0 : c->args.size(), var);
 
 	std::vector<Value*> args;
-	args.reserve(c->args.size() + 5);
+	args.reserve(c->args.size() + 4);
 
-	args.push_back(alloc(variant_type, name + "_ret"));
+	// todo: make & use new GML LLVM cc
+	Value *result = alloc(variant_type, name + "_ret");
+
 	args.push_back(self_scope);
 	args.push_back(other_scope);
 	if (var) args.push_back(builder.getInt16(c->args.size()));
@@ -397,7 +392,8 @@ Value *node_codegen::visit_call(call *c) {
 	CallInst *call = builder.CreateCall(function, args);
 	call->addAttribute(1, Attribute::StructRet);
 
-	return args[0];
+	builder.CreateStore(call, result);
+	return result;
 }
 
 Value *node_codegen::visit_assignment(assignment *a) {
@@ -727,14 +723,14 @@ Value *node_codegen::visit_jump(jump *j) {
 	switch (j->type) {
 	default: return 0;
 
-	case kw_exit: builder.CreateRetVoid(); break;
+	case kw_exit: builder.CreateRet(builder.CreateLoad(return_value)); break;
 	case kw_break:
 		if (current_end) builder.CreateBr(current_end);
-		else builder.CreateRetVoid();
+		else builder.CreateRet(builder.CreateLoad(return_value));
 		break;
 	case kw_continue:
 		if (current_loop) builder.CreateBr(current_loop);
-		else builder.CreateRetVoid();
+		else builder.CreateRet(builder.CreateLoad(return_value));
 		break;
 	}
 
@@ -746,8 +742,7 @@ Value *node_codegen::visit_jump(jump *j) {
 }
 
 Value *node_codegen::visit_returnstatement(returnstatement *r) {
-	builder.CreateMemCpy(return_value, visit(r->expr), dl->getTypeStoreSize(variant_type), 0);
-	builder.CreateRetVoid();
+	builder.CreateRet(builder.CreateLoad(visit(r->expr)));
 
 	Function *f = builder.GetInsertBlock()->getParent();
 	BasicBlock *cont = BasicBlock::Create(context, "cont", f);
@@ -760,17 +755,9 @@ Function *node_codegen::get_operator(StringRef name, int args) {
 	Function *function = module.getFunction(name);
 	if (function) return function;
 
-	std::vector<Type*> vargs(args + 1, variant_type->getPointerTo());
-	FunctionType *type = FunctionType::get(builder.getVoidTy(), vargs, false);
+	std::vector<Type*> vargs(args, variant_type->getPointerTo());
+	FunctionType *type = FunctionType::get(variant_type, vargs, false);
 	function = Function::Create(type, Function::ExternalLinkage, name, &module);
-
-	Function::arg_iterator ai = function->arg_begin();
-	Attribute::AttrKind attrs[] = { Attribute::NoAlias, Attribute::StructRet };
-	ai->addAttr(AttributeSet::get(context, ai->getArgNo() + 1, attrs));
-	for (++ai; ai != function->arg_end(); ++ai) {
-		Attribute::AttrKind attr[] = { Attribute::ByVal };
-		ai->addAttr(AttributeSet::get(context, ai->getArgNo() + 1, attr));
-	}
 
 	return function;
 }
@@ -780,20 +767,16 @@ Function *node_codegen::get_function(StringRef name, int args, bool var) {
 	if (function) return function;
 
 	std::vector<Type*> vargs(
-		args + (var ? 5 : 3), variant_type->getPointerTo()
+		args + (var ? 4 : 2), variant_type->getPointerTo()
 	);
-	vargs[1] = vargs[2] = scope_type;
-	if (var) vargs[3] = builder.getInt16Ty();
+	vargs[0] = vargs[1] = scope_type;
+	if (var) vargs[2] = builder.getInt16Ty();
 
-	FunctionType *type = FunctionType::get(builder.getVoidTy(), vargs, false);
+	FunctionType *type = FunctionType::get(variant_type, vargs, false);
 	function = Function::Create(type, Function::ExternalLinkage, name, &module);
 
 	Function::arg_iterator ai = function->arg_begin();
-	Attribute::AttrKind attrs[] = { Attribute::NoAlias, Attribute::StructRet };
-	ai->addAttr(AttributeSet::get(context, ai->getArgNo() + 1, attrs));
-
-	ai->setName("out");
-	ai++; ai->setName("self");
+	ai->setName("self");
 	ai++; ai->setName("other");
 	if (var) {
 		ai++; ai->setName("argc");
@@ -837,6 +820,8 @@ Value *node_codegen::get_real(Value *val) {
 }
 
 Value *node_codegen::get_string(StringRef val) {
+	// todo: not only do we have to unique string literals,
+	// the pool has to know about them
 	GlobalVariable *string;
 	if (string_literals.find(val) != string_literals.end()) {
 		string = string_literals[val];

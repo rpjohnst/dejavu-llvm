@@ -6,7 +6,7 @@
 struct scope;
 
 extern "C" variant show_error(
-	scope *self, scope *other, variant msg, variant abort
+	scope *self, scope *other, const variant &msg, const variant &abort
 );
 
 #endif

@@ -27,8 +27,8 @@ struct var {
 };
 
 extern "C" {
-	double to_real(variant a);
-	string *to_string(variant a);
+	double to_real(const variant &a);
+	string *to_string(const variant &a);
 
 	string *intern(string *s);
 

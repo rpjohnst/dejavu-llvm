@@ -61,11 +61,13 @@ runtime_SOURCES := $(shell find runtime system -name '*.cc')
 runtime_OBJECTS := $(runtime_SOURCES:.cc=.bc)
 runtime_DEPENDS := $(runtime_SOURCES:.cc=.d)
 
+runtime_CXXFLAGS := -fno-exceptions
+
 runtime.bc: $(runtime_OBJECTS)
 	llvm-link -o $@ $^
 
 %.bc: %.cc
-	$(CXX) -c -emit-llvm -std=c++11 -Iinclude $(DEPFLAGS) $(CXXFLAGS) -o $@ $<
+	$(CXX) -c -emit-llvm -std=c++11 -Iinclude $(DEPFLAGS) $(CXXFLAGS) $(runtime_CXXFLAGS) -o $@ $<
 
 # build the tests
 

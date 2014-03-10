@@ -2,14 +2,14 @@
 #include "dejavu/runtime/error.h"
 #include <cmath>
 
-extern "C" double to_real(variant a) {
+extern "C" double to_real(const variant &a) {
 	switch (a.type) {
 	case 0: return a.real;
 	default: show_error(0, 0, "expected a real", true); return 0;
 	}
 }
 
-extern "C" string *to_string(variant a) {
+extern "C" string *to_string(const variant &a) {
 	switch (a.type) {
 	case 1: return a.string;
 	default: show_error(0, 0, "expected a string", true); return nullptr;
@@ -70,8 +70,8 @@ typedef variant unary(variant);
 	return show_error(0, 0, "wrong type to " #s, true), 0; \
 }
 #define UNARY_TABLE(op) static unary *const op ## _table[]
-#define UNARY_DISPATCH(op) extern "C" variant op(variant a) { \
-	return op ## _table[a.type](a); \
+#define UNARY_DISPATCH(op) extern "C" variant op(variant *a) { \
+	return op ## _table[a->type](*a); \
 }
 
 #define UNARY_OP_REAL(name, op) \
@@ -99,8 +99,8 @@ typedef variant binary(variant, variant);
 	return show_error(0, 0, "wrong types to " #s, true), 0; \
 }
 #define BINARY_TABLE(op) static binary *const op ## _table[][2]
-#define BINARY_DISPATCH(op) extern "C" variant op(variant a, variant b) { \
-	return op ## _table[a.type][b.type](a, b); \
+#define BINARY_DISPATCH(op) extern "C" variant op(variant *a, variant *b) { \
+	return op ## _table[a->type][b->type](*a, *b); \
 }
 
 #define BINARY_OP_REAL(name, op) \
@@ -125,7 +125,10 @@ BINARY_TABLE(is_equals) = {
 };
 BINARY_DISPATCH(is_equals)
 
-extern "C" variant not_equals(variant a, variant b) { return !is_equals(a, b).real; }
+extern "C" variant not_equals(variant *a, variant *b) {
+	return !is_equals(a, b).real;
+}
+
 BINARY_OP_DEFAULT(greater_equals, >=)
 BINARY_OP_DEFAULT(greater, >)
 
