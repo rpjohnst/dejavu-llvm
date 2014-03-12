@@ -16,6 +16,10 @@ extern "C" string *to_string(const variant &a) {
 	}
 }
 
+extern "C" __attribute__((pure)) string *intern(string *s) {
+	return strings.intern(s);
+}
+
 // todo: resizing
 extern "C" variant *access(var *a, unsigned short x, unsigned short y) {
 	if (x >= a->x) {

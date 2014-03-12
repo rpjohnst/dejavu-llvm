@@ -30,7 +30,7 @@ extern "C" {
 	double to_real(const variant &a);
 	string *to_string(const variant &a);
 
-	string *intern(string *s);
+	string *intern(string *s) __attribute__((pure));
 
 	variant *access(var *a, unsigned short x, unsigned short y);
 

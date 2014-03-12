@@ -58,6 +58,11 @@ node_codegen::node_codegen(const DataLayout *dl, error_stream &e)
 		to_str_type, Function::ExternalLinkage, "to_string", &module
 	);
 
+	FunctionType *intern_type = FunctionType::get(string_type, string_type);
+	intern = Function::Create(
+		intern_type, Function::ExternalLinkage, "intern", &module
+	);
+
 	Type *access_args[] = {
 		var_type->getPointerTo(), builder.getInt16Ty(), builder.getInt16Ty()
 	};
@@ -820,17 +825,15 @@ Value *node_codegen::get_real(Value *val) {
 }
 
 Value *node_codegen::get_string(StringRef val) {
-	// todo: not only do we have to unique string literals,
-	// the pool has to know about them
-	GlobalVariable *string;
+	GlobalVariable *literal;
 	if (string_literals.find(val) != string_literals.end()) {
-		string = string_literals[val];
+		literal = string_literals[val];
 	}
 	else {
 		Type *size_type = builder.getIntPtrTy(dl);
 
 		Constant *contents[] = {
-			ConstantInt::get(size_type, 1, false), // refcount
+			ConstantInt::get(size_type, 0, false), // refcount
 			ConstantPointerNull::get(builder.getInt8PtrTy()), // pool
 			ConstantInt::get( // hash
 				size_type, string::compute_hash(val.size(), val.data()), false
@@ -839,25 +842,26 @@ Value *node_codegen::get_string(StringRef val) {
 			ConstantDataArray::getString(context, val, false) // data
 		};
 		Constant *s = ConstantStruct::getAnon(contents);
-		string = new GlobalVariable(
+		literal = new GlobalVariable(
 			module, s->getType(), false, GlobalValue::PrivateLinkage, s
 		);
-		string_literals[val] = string;
+		string_literals[val] = literal;
 	}
 
-	Constant *contents[] = {
-		builder.getInt8(1), string,
-		UndefValue::get(ArrayType::get(
-			builder.getInt8Ty(), std::max(union_diff, 0)
-		))
-	};
-	Constant *variant = ConstantStruct::getAnon(contents);
-	GlobalVariable *global = new GlobalVariable(
-		module, variant->getType(), true, GlobalValue::InternalLinkage, variant
-	);
-	global->setUnnamedAddr(true);
+	Value *variant = alloc(variant_type, "string");
 
-	return builder.CreateBitCast(global, variant_type->getPointerTo());
+	Value *tindices[] = { builder.getInt32(0), builder.getInt32(0) };
+	Value *type = builder.CreateInBoundsGEP(variant, tindices);
+	builder.CreateStore(builder.getInt8(1), type);
+
+	Value *sindices[] = { builder.getInt32(0), builder.getInt32(1) };
+	Value *string = builder.CreateBitCast(
+		builder.CreateInBoundsGEP(variant, sindices),
+		string_type->getPointerTo()
+	);
+	builder.CreateStore(builder.CreateCall(intern, literal), string);
+
+	return variant;
 }
 
 Value *node_codegen::to_bool(node *cond) {

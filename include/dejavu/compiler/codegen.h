@@ -91,6 +91,8 @@ private:
 	llvm::Function *to_real;
 	llvm::Function *to_string;
 
+	llvm::Function *intern;
+
 	llvm::Function *lookup;
 	llvm::Function *access;
 
