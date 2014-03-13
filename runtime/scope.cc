@@ -3,11 +3,14 @@
 
 static scope global;
 
+static table<string*, var*> globalvar;
+extern "C" void insert_globalvar(string *name) {
+	globalvar[name] = &global[name];
+}
+
 extern "C" var *lookup(
 	scope *self, scope *other, double id, string *name, bool lvalue
 ) {
-	// todo: globalvar
-
 	scope *s = 0;
 	switch ((int)id) {
 	case -1: s = self; break;
@@ -35,4 +38,15 @@ extern "C" var *lookup(
 		s->insert(name);
 	}
 	return &(*s)[name];
+}
+
+extern "C" var *lookup_default(
+	scope *self, scope *other, string *name, bool lvalue
+) {
+	table<string*, var*>::node *n = globalvar.find(name);
+	if (n != globalvar.end()) {
+		return n->v;
+	}
+
+	return lookup(self, other, -1, name, lvalue);
 }

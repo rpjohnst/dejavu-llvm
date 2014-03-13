@@ -31,7 +31,7 @@ public:
 
 	void error(const redefinition_error &e) {
 		std::ostringstream s;
-		s	<< context << ": redefinition of function" << e.name << "\n";
+		s	<< context << ": error:  redefinition of " << e.name << "\n";
 		log.append(s.str().c_str());
 		errors++;
 	}

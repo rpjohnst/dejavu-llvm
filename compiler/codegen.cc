@@ -106,6 +106,26 @@ node_codegen::node_codegen(const DataLayout *dl, error_stream &e)
 		release_var_type, Function::ExternalLinkage, "release_var", &module
 	);
 
+	Type *insert_globalvar_args[] = { string_type };
+	FunctionType *insert_globalvar_type = FunctionType::get(
+		builder.getVoidTy(), insert_globalvar_args, false
+	);
+	insert_globalvar = Function::Create(
+		insert_globalvar_type,
+		Function::ExternalLinkage, "insert_globalvar", &module
+	);
+
+	Type *lookup_default_args[] = {
+		scope_type, scope_type, string_type, builder.getInt1Ty()
+	};
+	FunctionType *lookup_default_type = FunctionType::get(
+		var_type->getPointerTo(), lookup_default_args, false
+	);
+	lookup_default = Function::Create(
+		lookup_default_type, Function::ExternalLinkage,
+		"lookup_default", &module
+	);
+
 	Type *lookup_args[] = {
 		scope_type, scope_type, real_type, string_type, builder.getInt1Ty()
 	};
@@ -216,14 +236,14 @@ Value *node_codegen::visit_value(value *v) {
 
 	case v_name: {
 		std::string name(v->t.string.data, v->t.string.length);
-		Value *var = scope.find(name) != scope.end() ? scope[name] : do_lookup(
-			ConstantFP::get(builder.getDoubleTy(), -1),
-			builder.CreateCall(
-				to_string,
-				get_string(StringRef(v->t.string.data, v->t.string.length))
-			),
-			lvalue
-		);
+		Value *var = scope.find(name) != scope.end() ? scope[name] :
+			do_lookup_default(
+				builder.CreateCall(
+					to_string,
+					get_string(StringRef(v->t.string.data, v->t.string.length))
+				),
+				lvalue
+			);
 		return builder.CreateCall4(
 			access, var,
 			builder.getInt16(0), builder.getInt16(0), builder.getInt1(lvalue)
@@ -334,8 +354,7 @@ Value *node_codegen::visit_subscript(subscript *s) {
 	case value_node: {
 		value *v = static_cast<value*>(s->array);
 		std::string name(v->t.string.data, v->t.string.length);
-		var = scope.find(name) != scope.end() ? scope[name] : do_lookup(
-			ConstantFP::get(builder.getDoubleTy(), -1),
+		var = scope.find(name) != scope.end() ? scope[name] : do_lookup_default(
 			builder.CreateCall(
 				to_string,
 				get_string(StringRef(v->t.string.data, v->t.string.length))
@@ -451,14 +470,28 @@ Value *node_codegen::visit_invocation(invocation* i) {
 }
 
 Value *node_codegen::visit_declaration(declaration *d) {
-	if (d->type.type == kw_globalvar) {
-		// todo: globalvar
-		errors.error(unsupported_error("globalvar", d->type));
-		return 0;
-	}
-
-	for (std::vector<value*>::iterator it = d->names.begin(); it != d->names.end(); ++it) {
+	for (
+		std::vector<value*>::iterator it = d->names.begin();
+		it != d->names.end(); ++it
+	) {
 		std::string name((*it)->t.string.data, (*it)->t.string.length);
+
+		if (name == "argument" || name == "argument_count") {
+			errors.error(redefinition_error(name));
+			continue;
+		}
+		if (d->type.type == kw_globalvar) {
+			builder.CreateCall(
+				insert_globalvar,
+				builder.CreateCall(to_string, get_string(name))
+			);
+			continue;
+		}
+
+		if (scope.find(name) != scope.end()) {
+			builder.CreateCall(release_var, scope[name]);
+		}
+
 		scope[name] = make_local(
 			name, Constant::getNullValue(variant_type->getPointerTo())
 		);
@@ -928,5 +961,11 @@ Value *node_codegen::make_local(
 Value *node_codegen::do_lookup(Value *left, Value *right, bool lvalue) {
 	return builder.CreateCall5(
 		lookup, self_scope, other_scope, left, right, builder.getInt1(lvalue)
+	);
+}
+
+Value *node_codegen::do_lookup_default(Value *right, bool lvalue) {
+	return builder.CreateCall4(
+		lookup_default, self_scope, other_scope, right, builder.getInt1(lvalue)
 	);
 }

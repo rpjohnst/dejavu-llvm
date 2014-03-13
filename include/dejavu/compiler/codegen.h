@@ -70,6 +70,9 @@ private:
 	llvm::AllocaInst *alloc(llvm::Type*, llvm::Value*, const llvm::Twine&);
 
 	llvm::Value *do_lookup(llvm::Value *left, llvm::Value *right, bool lvalue);
+	llvm::Value *do_lookup_default(
+		llvm::Value *right, bool lvalue
+	);
 
 	llvm::LLVMContext context;
 	llvm::IRBuilder<> builder;
@@ -93,7 +96,9 @@ private:
 
 	llvm::Function *intern;
 
+	llvm::Function *insert_globalvar;
 	llvm::Function *lookup;
+	llvm::Function *lookup_default;
 	llvm::Function *access;
 
 	llvm::Function *retain;
