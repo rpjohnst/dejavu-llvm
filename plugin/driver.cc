@@ -19,11 +19,27 @@ public:
 
 	void error(const unexpected_token_error &e) {
 		std::ostringstream s;
-		s	<< context << ":" << e.unexpected.row << ":" << e.unexpected.col << ": "
-			<< "error: unexpected '" << e.unexpected << "'; expected ";
+		s	<< context << ":" << e.unexpected.row << ":" << e.unexpected.col
+			<< ": error: unexpected '" << e.unexpected << "'; expected ";
 		if (e.expected) s << e.expected;
 		else s << e.expected_token;
 		s << "\n";
+
+		log.append(s.str().c_str());
+		errors++;
+	}
+
+	void error(const redefinition_error &e) {
+		std::ostringstream s;
+		s	<< context << ": redefinition of function" << e.name << "\n";
+		log.append(s.str().c_str());
+		errors++;
+	}
+
+	void error(const unsupported_error &e) {
+		std::ostringstream s;
+		s	<< context << ":" << e.position.row << ":" << e.position.col
+			<< ": error: feature is unsupported (" << e.name << ")\n";
 
 		log.append(s.str().c_str());
 		errors++;

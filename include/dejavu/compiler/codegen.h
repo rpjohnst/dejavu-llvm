@@ -69,7 +69,7 @@ private:
 	llvm::AllocaInst *alloc(llvm::Type*, const llvm::Twine&);
 	llvm::AllocaInst *alloc(llvm::Type*, llvm::Value*, const llvm::Twine&);
 
-	llvm::Value *do_lookup(llvm::Value *left, llvm::Value *right);
+	llvm::Value *do_lookup(llvm::Value *left, llvm::Value *right, bool lvalue);
 
 	llvm::LLVMContext context;
 	llvm::IRBuilder<> builder;
@@ -117,6 +117,8 @@ private:
 	llvm::Function::iterator current_cond = 0;
 	llvm::BasicBlock *current_default = 0;
 	llvm::Value *current_switch = 0;
+
+	bool lvalue = false;
 
 	error_stream& errors;
 };

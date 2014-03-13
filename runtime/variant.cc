@@ -1,6 +1,7 @@
 #include "dejavu/runtime/variant.h"
 #include "dejavu/runtime/error.h"
 #include <cmath>
+#include <algorithm>
 
 extern "C" double to_real(const variant &a) {
 	switch (a.type) {
@@ -20,16 +21,31 @@ extern "C" __attribute__((pure)) string *intern(string *s) {
 	return strings.intern(s);
 }
 
-// todo: resizing
-extern "C" variant *access(var *a, unsigned short x, unsigned short y) {
-	if (x >= a->x) {
-		show_error(0, 0, "index out of bounds", true);
-		return 0;
-	}
+extern "C" variant *access(
+	var *a, unsigned short x, unsigned short y, bool lvalue
+) {
+	if (x >= a->x || y >= a->y) {
+		if (!lvalue) {
+			show_error(0, 0, "index out of bounds", true);
+			return 0;
+		}
 
-	if (y >= a->y) {
-		show_error(0, 0, "index out of bounds", true);
-		return 0;
+		size_t nx = std::max((unsigned short)(x + 1), a->x);
+		size_t ny = std::max((unsigned short)(y + 1), a->y);
+
+		variant *contents = new variant[nx * ny];
+		for (size_t r = 0; r < a->y; r++) {
+			memmove(
+				&contents[r * nx],
+				&a->contents[r * a->x],
+				a->x * sizeof(*contents)
+			);
+		}
+
+		delete[] a->contents;
+		a->x = nx;
+		a->y = ny;
+		a->contents = contents;
 	}
 
 	return &a->contents[x + y * a->x];
@@ -63,6 +79,7 @@ extern "C" void release_var(var *a) {
 			release(v);
 		}
 	}
+	delete[] a->contents;
 }
 
 // unary operators
@@ -169,5 +186,5 @@ BINARY_OP_REAL(bit_xor, ^) { return (int)a.real ^ (int)b.real; }
 BINARY_OP_REAL(shift_left, <<) { return (int)a.real << (int)b.real; }
 BINARY_OP_REAL(shift_right, >>) { return (int)a.real >> (int)b.real; }
 
-BINARY_OP_REAL(div, div) { return (int)(a.real / b.real); }
+BINARY_OP_REAL(div_, div) { return (int)(a.real / b.real); }
 BINARY_OP_REAL(mod, mod) { return fmod(a.real, b.real); }

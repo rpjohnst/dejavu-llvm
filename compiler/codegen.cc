@@ -40,7 +40,7 @@ node_codegen::node_codegen(const DataLayout *dl, error_stream &e)
 	Type *var[] = { dim, dim, contents };
 	var_type = StructType::create(var, "struct.var");
 
-	scope_type = StructType::create(context, "scope")->getPointerTo();
+	scope_type = StructType::create(context, "struct.scope")->getPointerTo();
 
 	// runtime functions
 	// todo: put these in a library like the GML standard library
@@ -64,7 +64,8 @@ node_codegen::node_codegen(const DataLayout *dl, error_stream &e)
 	);
 
 	Type *access_args[] = {
-		var_type->getPointerTo(), builder.getInt16Ty(), builder.getInt16Ty()
+		var_type->getPointerTo(),
+		builder.getInt16Ty(), builder.getInt16Ty(), builder.getInt1Ty()
 	};
 	FunctionType *access_type = FunctionType::get(
 		variant_type->getPointerTo(), access_args, false
@@ -105,7 +106,9 @@ node_codegen::node_codegen(const DataLayout *dl, error_stream &e)
 		release_var_type, Function::ExternalLinkage, "release_var", &module
 	);
 
-	Type *lookup_args[] = { scope_type, scope_type, real_type, string_type };
+	Type *lookup_args[] = {
+		scope_type, scope_type, real_type, string_type, builder.getInt1Ty()
+	};
 	FunctionType *lookup_type = FunctionType::get(
 		var_type->getPointerTo(), lookup_args, false
 	);
@@ -153,9 +156,7 @@ Function *node_codegen::add_function(
 ) {
 	Function *function = get_function(name, nargs, var);
 	if (!function->empty()) {
-		std::ostringstream ss;
-		ss << "error: redefinition of function " << name;
-		errors.error(ss.str().c_str());
+		errors.error(redefinition_error(name));
 		return function;
 	}
 
@@ -197,6 +198,9 @@ Function *node_codegen::add_function(
 		std::unordered_map<std::string, Value*>::iterator it = scope.begin();
 		it != scope.end(); ++it
 	) {
+		if (it->first == "argument_count" || it->first == "argument")
+			continue;
+
 		builder.CreateCall(release_var, it->second);
 	}
 
@@ -217,10 +221,12 @@ Value *node_codegen::visit_value(value *v) {
 			builder.CreateCall(
 				to_string,
 				get_string(StringRef(v->t.string.data, v->t.string.length))
-			)
+			),
+			lvalue
 		);
-		return builder.CreateCall3(
-			access, var, builder.getInt16(0), builder.getInt16(0)
+		return builder.CreateCall4(
+			access, var,
+			builder.getInt16(0), builder.getInt16(0), builder.getInt1(lvalue)
 		);
 	}
 
@@ -272,10 +278,12 @@ Value *node_codegen::visit_binary(binary *b) {
 			builder.CreateCall(
 				to_string,
 				get_string(StringRef(name.string.data, name.string.length))
-			)
+			),
+			lvalue
 		);
-		return builder.CreateCall3(
-			access, var, builder.getInt16(0), builder.getInt16(0)
+		return builder.CreateCall4(
+			access, var,
+			builder.getInt16(0), builder.getInt16(0), builder.getInt1(lvalue)
 		);
 	}
 
@@ -302,7 +310,7 @@ Value *node_codegen::visit_binary(binary *b) {
 	case shift_left: name = "shift_left"; break;
 	case shift_right: name = "shift_right"; break;
 
-	case kw_div: name = "div"; break;
+	case kw_div: name = "div_"; break; // get around c
 	case kw_mod: name = "mod"; break;
 	}
 
@@ -318,9 +326,7 @@ Value *node_codegen::visit_binary(binary *b) {
 	return result;
 }
 
-// todo: {bounds,type,syntax} checking
 Value *node_codegen::visit_subscript(subscript *s) {
-	// todo: should this be in a get_lvalue function?
 	Value *var;
 	switch (s->array->type) {
 	default: return 0;
@@ -333,7 +339,8 @@ Value *node_codegen::visit_subscript(subscript *s) {
 			builder.CreateCall(
 				to_string,
 				get_string(StringRef(v->t.string.data, v->t.string.length))
-			)
+			),
+			lvalue
 		);
 		break;
 	}
@@ -346,7 +353,8 @@ Value *node_codegen::visit_subscript(subscript *s) {
 			builder.CreateCall(
 				to_string,
 				get_string(StringRef(name.string.data, name.string.length))
-			)
+			),
+			lvalue
 		);
 		break;
 	}
@@ -361,7 +369,9 @@ Value *node_codegen::visit_subscript(subscript *s) {
 		indices[i] = index;
 	}
 
-	return builder.CreateCall3(access, var, indices[0], indices[1]);
+	return builder.CreateCall4(
+		access, var, indices[0], indices[1], builder.getInt1(lvalue)
+	);
 }
 
 Value *node_codegen::visit_call(call *c) {
@@ -422,7 +432,13 @@ Value *node_codegen::visit_assignment(assignment *a) {
 		r = visit_binary(&b);
 	}
 
-	Value *l = visit(a->lvalue);
+	Value *l;
+	{
+		save_context<bool> save(lvalue);
+		lvalue = true;
+		l = visit(a->lvalue);
+	}
+
 	builder.CreateCall(release, l);
 	builder.CreateMemCpy(l, r, dl->getTypeStoreSize(variant_type), 0);
 	builder.CreateCall(retain, l);
@@ -435,10 +451,17 @@ Value *node_codegen::visit_invocation(invocation* i) {
 }
 
 Value *node_codegen::visit_declaration(declaration *d) {
-	// todo: var vs globalvar
+	if (d->type.type == kw_globalvar) {
+		// todo: globalvar
+		errors.error(unsupported_error("globalvar", d->type));
+		return 0;
+	}
+
 	for (std::vector<value*>::iterator it = d->names.begin(); it != d->names.end(); ++it) {
 		std::string name((*it)->t.string.data, (*it)->t.string.length);
-		scope[name] = make_local(name, alloc(variant_type, name));
+		scope[name] = make_local(
+			name, Constant::getNullValue(variant_type->getPointerTo())
+		);
 	}
 
 	return 0;
@@ -902,6 +925,8 @@ Value *node_codegen::make_local(
 	return l;
 }
 
-Value *node_codegen::do_lookup(Value *left, Value *right) {
-	return builder.CreateCall4(lookup, self_scope, other_scope, left, right);
+Value *node_codegen::do_lookup(Value *left, Value *right, bool lvalue) {
+	return builder.CreateCall5(
+		lookup, self_scope, other_scope, left, right, builder.getInt1(lvalue)
+	);
 }

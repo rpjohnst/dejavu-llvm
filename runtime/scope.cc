@@ -3,7 +3,9 @@
 
 static scope global;
 
-extern "C" var *lookup(scope *self, scope *other, double id, string *name) {
+extern "C" var *lookup(
+	scope *self, scope *other, double id, string *name, bool lvalue
+) {
 	// todo: globalvar
 
 	scope *s = 0;
@@ -24,6 +26,13 @@ extern "C" var *lookup(scope *self, scope *other, double id, string *name) {
 	default: return 0;
 	}
 
-	// todo: uninitialized vars (differentiate lvalue and rvalue lookups)
+	if (s->find(name) == s->end()) {
+		if (!lvalue) {
+			show_error(self, other, "variable does not exist", true);
+			return 0;
+		}
+
+		s->insert(name);
+	}
 	return &(*s)[name];
 }

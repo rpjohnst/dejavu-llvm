@@ -32,7 +32,9 @@ extern "C" {
 
 	string *intern(string *s) __attribute__((pure));
 
-	variant *access(var *a, unsigned short x, unsigned short y);
+	variant *access(
+		var *a, unsigned short x, unsigned short y, bool lvalue = false
+	);
 
 	void retain(variant *a);
 	void release(variant *a);
