@@ -18,10 +18,9 @@ What DejaVu is currently capable of:
     - local, self, other, and global scope lookup
 
 What's next:
-* Array resize and memory management
-* Dealing with object-local, object-id, global, and globalvar scopes; `with` statements
-* Object-local accessors like `direction`/`speed` and `hspeed`/`vspeed`
+* Accessors like `argument0`, `direction`/`speed` and `hspeed`/`vspeed`
+* Object/instance access, `with` statements
+* The GML standard library and game engine
 * Exporting executables using a system linker (ideally LLVM's LLD, but until it supports more executable formats it will be the system linker)
 * Writing game assets into the executable
-* The GML standard library and game engine
 * New IDE with better D&D support and native widgets
