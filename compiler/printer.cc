@@ -1,5 +1,5 @@
-#include "dejavu/compiler/printer.h"
-#include "dejavu/compiler/parser.h"
+#include <dejavu/compiler/printer.h>
+#include <dejavu/compiler/parser.h>
 #include <cstdio>
 
 void print_token(const token& t) {

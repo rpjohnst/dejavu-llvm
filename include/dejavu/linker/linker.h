@@ -1,7 +1,7 @@
 #ifndef LINKER_H
 #define LINKER_H
 
-#include "dejavu/compiler/codegen.h"
+#include <dejavu/compiler/codegen.h>
 
 struct game;
 struct error_stream;
@@ -13,7 +13,7 @@ namespace llvm {
 class linker {
 public:
 	linker(game&, const std::string &triple, error_stream&);
-	bool build(const char *target);
+	bool build(const char *target, bool debug);
 
 private:
 	void build_libraries();

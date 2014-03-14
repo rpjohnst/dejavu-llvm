@@ -8,7 +8,7 @@ class buffer;
 
 enum token_type {
 #define TOK(X) X,
-#include "dejavu/compiler/tokens.tbl"
+#include <dejavu/compiler/tokens.tbl>
 };
 
 std::ostream &operator <<(std::ostream &o, token_type t);

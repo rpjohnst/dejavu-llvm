@@ -1,11 +1,11 @@
 #include "driver.h"
-#include "dejavu/linker/linker.h"
-#include "dejavu/linker/game.h"
-#include "dejavu/compiler/error_stream.h"
+#include <dejavu/linker/linker.h>
+#include <dejavu/linker/game.h>
+#include <dejavu/compiler/error_stream.h>
 
-#include "llvm/Support/Host.h"
-#include "llvm/Support/TargetSelect.h"
-#include "llvm/Support/ManagedStatic.h"
+#include <llvm/Support/Host.h>
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/ManagedStatic.h>
 
 #include <cstdio>
 #include <sstream>
@@ -64,9 +64,12 @@ private:
 
 llvm::llvm_shutdown_obj y;
 
-bool compile(const char *target, game &source, build_log &log) {
+// todo: replace debug with configuration struct
+bool compile(const char *target, game &source, build_log &log, bool debug) {
 	error_printer errors(log);
 
 	llvm::InitializeNativeTarget();
-	return linker(source, llvm::sys::getDefaultTargetTriple(), errors).build(target);
+	return linker(
+		source, llvm::sys::getDefaultTargetTriple(), errors
+	).build(target, debug);
 }

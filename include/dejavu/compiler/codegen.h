@@ -80,6 +80,8 @@ private:
 	const llvm::DataLayout *dl;
 
 	llvm::StringMap<llvm::GlobalVariable*> string_literals;
+
+	// todo: resolve namespace issues by mapping to llvm::Function*s
 	std::unordered_set<std::string> scripts;
 
 	// runtime types

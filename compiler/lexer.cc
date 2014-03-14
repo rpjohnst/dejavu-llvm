@@ -1,5 +1,5 @@
-#include "dejavu/compiler/lexer.h"
-#include "dejavu/system/buffer.h"
+#include <dejavu/compiler/lexer.h>
+#include <dejavu/system/buffer.h>
 #include <cstdlib>
 #include <map>
 #include <sstream>

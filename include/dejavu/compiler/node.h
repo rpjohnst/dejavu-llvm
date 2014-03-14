@@ -2,11 +2,11 @@
 #define NODE_H
 
 #include <vector>
-#include "dejavu/compiler/lexer.h"
+#include <dejavu/compiler/lexer.h>
 
 enum node_type {
 #define NODE(X) X ## _node,
-#include "dejavu/compiler/nodes.tbl"
+#include <dejavu/compiler/nodes.tbl>
 };
 
 struct node {

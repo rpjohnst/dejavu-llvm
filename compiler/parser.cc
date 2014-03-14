@@ -1,4 +1,4 @@
-#include "dejavu/compiler/parser.h"
+#include <dejavu/compiler/parser.h>
 
 bool isassignment(token_type t) {
 	switch (t) {

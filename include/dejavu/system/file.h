@@ -1,7 +1,7 @@
 #ifndef FILE_H
 #define FILE_H
 
-#include "dejavu/system/buffer.h"
+#include <dejavu/system/buffer.h>
 
 class file_buffer : public buffer {
 public:

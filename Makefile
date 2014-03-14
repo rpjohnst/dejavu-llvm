@@ -17,7 +17,8 @@ clean:
 # toolchain configuration
 
 CXX := clang++
-CXXFLAGS := -Wall -Wextra -g
+CXXFLAGS := -Wall -Wextra -Wno-unused-parameter -g
+LLVM_PREFIX :=
 
 # build the interface
 
@@ -45,9 +46,9 @@ library_OBJECTS := $(library_SOURCES:.cc=.o)
 library_DEPENDS := $(library_SOURCES:.cc=.d)
 
 library_CXXFLAGS := -fpic
-library_CPPFLAGS := $(shell llvm-config --cppflags) -I$(JAVA_HOME)/include{,/linux}
-library_LDFLAGS := -shared $(shell llvm-config --ldflags)
-library_LDLIBS := $(shell llvm-config --libs core native scalaropts ipo linker bitreader bitwriter)
+library_CPPFLAGS := $(shell $(LLVM_PREFIX)llvm-config --cppflags) -I$(JAVA_HOME)/include{,/linux}
+library_LDFLAGS := -shared $(shell $(LLVM_PREFIX)llvm-config --ldflags)
+library_LDLIBS := $(shell $(LLVM_PREFIX)llvm-config --libs core native scalaropts ipo linker bitreader bitwriter)
 
 dejavu.so: $(library_OBJECTS)
 	$(CXX) $(library_LDFLAGS) -o $@ $^ $(library_LDLIBS)
@@ -64,7 +65,7 @@ runtime_DEPENDS := $(runtime_SOURCES:.cc=.d)
 runtime_CXXFLAGS := -fno-exceptions
 
 runtime.bc: $(runtime_OBJECTS)
-	llvm-link -o $@ $^
+	$(LLVM_PREFIX)llvm-link -o $@ $^
 
 %.bc: %.cc
 	$(CXX) -c -emit-llvm -std=c++11 -Iinclude $(DEPFLAGS) $(CXXFLAGS) $(runtime_CXXFLAGS) -o $@ $<

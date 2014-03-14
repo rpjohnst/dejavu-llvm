@@ -2,6 +2,7 @@
 #define TABLE_H
 
 #include <cstddef>
+#include <cassert>
 
 template <class k>
 struct hash;
@@ -114,6 +115,8 @@ public:
 
 private:
 	void resize(size_t s) {
+		assert(s > 0);
+
 		node *old_contents = contents;
 		size_t old_length = length;
 

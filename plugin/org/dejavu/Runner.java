@@ -102,7 +102,7 @@ public class Runner implements ActionListener, LGM.ReloadListener {
 		return new ImageIcon(url);
 	}
 
-	private synchronized boolean build(File target) {
+	private synchronized boolean build(File target, boolean debug) {
 		progress.reset();
 		progress.message("writing game data");
 		LGM.commitAll();
@@ -114,7 +114,7 @@ public class Runner implements ActionListener, LGM.ReloadListener {
 			"building " + source.getName() + " (" + source.getVersion() + ")" +
 			" to " + target.getPath() + "\n"
 		);
-		boolean success = dejavu.compile(target.getPath(), source, progress.new Log());
+		boolean success = dejavu.compile(target.getPath(), source, progress.new Log(), debug);
 
 		if (success) {
 			progress.percent(100);
@@ -140,7 +140,7 @@ public class Runner implements ActionListener, LGM.ReloadListener {
 
 		final File target = file;
 		new Thread() { public void run() {
-			build(target);
+			build(target, false);
 		} }.start();
 	}
 
@@ -155,7 +155,7 @@ public class Runner implements ActionListener, LGM.ReloadListener {
 		}
 
 		new Thread() { public void run() {
-			boolean success = build(target);
+			boolean success = build(target, false);
 			if (success) progress.append("run " + target.getPath() + "\n");
 		} }.start();
 	}
@@ -171,7 +171,7 @@ public class Runner implements ActionListener, LGM.ReloadListener {
 		}
 
 		new Thread() { public void run() {
-			boolean success = build(target);
+			boolean success = build(target, true);
 			if (success) progress.append("debug " + target.getPath() + "\n");
 		} }.start();
 	}

@@ -1,8 +1,8 @@
 #ifndef PRINTER_H
 #define PRINTER_H
 
-#include "dejavu/compiler/lexer.h"
-#include "dejavu/compiler/node_visitor.h"
+#include <dejavu/compiler/lexer.h>
+#include <dejavu/compiler/node_visitor.h>
 
 void print_token(const token& t);
 

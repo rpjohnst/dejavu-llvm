@@ -1,7 +1,7 @@
 #ifndef ERROR_STREAM_H
 #define ERROR_STREAM_H
 
-#include "dejavu/compiler/lexer.h"
+#include <dejavu/compiler/lexer.h>
 
 struct unexpected_token_error {
 	unexpected_token_error(token unexpected, const char *expected) :

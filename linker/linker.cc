@@ -1,10 +1,10 @@
-#include "dejavu/linker/linker.h"
-#include "dejavu/linker/game.h"
+#include <dejavu/linker/linker.h>
+#include <dejavu/linker/game.h>
 
-#include "dejavu/compiler/lexer.h"
-#include "dejavu/compiler/parser.h"
-#include "dejavu/compiler/codegen.h"
-#include "dejavu/system/buffer.h"
+#include <dejavu/compiler/lexer.h>
+#include <dejavu/compiler/parser.h>
+#include <dejavu/compiler/codegen.h>
+#include <dejavu/system/buffer.h>
 
 #include <llvm/PassManager.h>
 #include <llvm/Analysis/Passes.h>
@@ -22,6 +22,7 @@
 #include <llvm/IR/DataLayout.h>
 
 #include <llvm/Support/ToolOutputFile.h>
+#include <llvm/ADT/OwningPtr.h>
 
 #include <sstream>
 #include <algorithm>
@@ -40,7 +41,7 @@ const DataLayout *get_layout(const std::string &triple) {
 linker::linker(game &g, const std::string &triple, error_stream &e) :
 	source(g), errors(e), dl(get_layout(triple)), compiler(dl, errors) {}
 
-bool linker::build(const char *target) {
+bool linker::build(const char *target, bool debug) {
 	errors.progress(20, "compiling libraries");
 	build_libraries();
 
@@ -61,16 +62,19 @@ bool linker::build(const char *target) {
 		Linker::LinkModules(&game, runtime, Linker::DestroySource, NULL);
 	}
 
-	errors.progress(80, "optimizing game");
-
 	PassManager pm;
 	pm.add(new DataLayout(*dl));
 	pm.add(createVerifierPass());
 
-	PassManagerBuilder pmb;
-	pmb.OptLevel = 3;
-	pmb.populateModulePassManager(pm);
-	pmb.populateLTOPassManager(pm, true, true);
+	if (!debug) {
+		errors.progress(80, "optimizing game");
+
+		PassManagerBuilder pmb;
+		pmb.OptLevel = 3;
+
+		pmb.populateModulePassManager(pm);
+		pmb.populateLTOPassManager(pm, true, true);
+	}
 
 	std::string error_info;
 	std::unique_ptr<tool_output_file> out(

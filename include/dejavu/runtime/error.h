@@ -1,7 +1,7 @@
 #ifndef RUNTIME_ERROR_H
 #define RUNTIME_ERROR_H
 
-#include "dejavu/runtime/variant.h"
+#include <dejavu/runtime/variant.h>
 
 struct scope;
 
