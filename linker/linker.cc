@@ -29,17 +29,15 @@
 
 using namespace llvm;
 
-const DataLayout *get_layout(const std::string &triple) {
-	std::string error;
-	const Target *target = TargetRegistry::lookupTarget(triple, error);
-	TargetMachine *machine = target->createTargetMachine(
-		triple, "", "", TargetOptions()
-	);
-	return machine->getDataLayout();
+Module *linker::get_runtime(const char *runtime) {
+	OwningPtr<MemoryBuffer> rt;
+	MemoryBuffer::getFile(runtime, rt);
+	return ParseBitcodeFile(rt.get(), context);
 }
 
 linker::linker(game &g, const std::string &triple, error_stream &e) :
-	source(g), errors(e), dl(get_layout(triple)), compiler(dl, errors) {}
+	source(g), errors(e), runtime(get_runtime("runtime.bc")),
+	compiler(context, *runtime.get(), errors) {}
 
 bool linker::build(const char *target, bool debug) {
 	errors.progress(20, "compiling libraries");
@@ -55,15 +53,9 @@ bool linker::build(const char *target, bool debug) {
 
 	errors.progress(60, "linking runtime");
 	Module &game = compiler.get_module();
-	{
-		OwningPtr<MemoryBuffer> rt;
-		MemoryBuffer::getFile("runtime.bc", rt);
-		Module *runtime = ParseBitcodeFile(rt.get(), game.getContext());
-		Linker::LinkModules(&game, runtime, Linker::DestroySource, NULL);
-	}
+	Linker::LinkModules(&game, runtime.get(), Linker::PreserveSource, NULL);
 
 	PassManager pm;
-	pm.add(new DataLayout(*dl));
 	pm.add(createVerifierPass());
 
 	if (!debug) {
@@ -78,7 +70,7 @@ bool linker::build(const char *target, bool debug) {
 
 	std::string error_info;
 	std::unique_ptr<tool_output_file> out(
-		new tool_output_file(target, error_info, sys::fs::F_Binary)
+		new tool_output_file(target, error_info, sys::fs::F_None)
 	);
 	if (!error_info.empty()) {
 		errors.error(error_info);

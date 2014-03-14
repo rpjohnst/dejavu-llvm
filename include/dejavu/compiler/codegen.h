@@ -11,13 +11,12 @@
 #include <unordered_set>
 #include <string>
 
-namespace llvm {
-	class DataLayout;
-}
-
 class node_codegen : public node_visitor<node_codegen, llvm::Value*> {
 public:
-	node_codegen(const llvm::DataLayout*, error_stream &e);
+	node_codegen(
+		llvm::LLVMContext &context, const llvm::Module &runtime,
+		error_stream &e
+	);
 	llvm::Function *add_function(
 		node*, const char *name, size_t nargs, bool var
 	);
@@ -74,10 +73,12 @@ private:
 		llvm::Value *right, bool lvalue
 	);
 
-	llvm::LLVMContext context;
+	llvm::LLVMContext &context;
+	const llvm::Module &runtime;
+	const llvm::DataLayout dl;
+
 	llvm::IRBuilder<> builder;
 	llvm::Module module;
-	const llvm::DataLayout *dl;
 
 	llvm::StringMap<llvm::GlobalVariable*> string_literals;
 

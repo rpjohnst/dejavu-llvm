@@ -8,154 +8,72 @@
 
 using namespace llvm;
 
-node_codegen::node_codegen(const DataLayout *dl, error_stream &e)
-	: builder(context), module("", context), dl(dl), errors(e) {
+node_codegen::node_codegen(
+	LLVMContext &context, const Module &runtime, error_stream &e
+) : context(context), runtime(runtime), dl(&runtime),
+	builder(context), module("", context), errors(e) {
 
 	real_type = builder.getDoubleTy();
+	string_type = runtime.getTypeByName("struct.string")->getPointerTo();
+	variant_type = runtime.getTypeByName("struct.variant");
+	var_type = runtime.getTypeByName("struct.var");
+	scope_type = runtime.getTypeByName("struct.scope")->getPointerTo();
 
-	Type *size_type = builder.getIntPtrTy(dl);
-
-	// todo: load these from runtime.bc
 	// todo: create a gml calling convention for the runtime
-
-	Type *string[] = {
-		size_type, // refcount
-		builder.getInt8PtrTy(), // pool
-		size_type, // hash
-		size_type, // length
-		ArrayType::get(builder.getInt8Ty(), 0)
-	};
-	string_type = StructType::create(string, "struct.string")->getPointerTo();
-
-	union_diff =
-		dl->getTypeAllocSize(real_type) - dl->getTypeAllocSize(string_type);
-	Type *union_type = union_diff > 0 ? real_type : string_type;
-
-	Type *variant[] = { builder.getInt8Ty(), union_type };
-	variant_type = StructType::create(variant, "struct.variant");
-
-	Type
-		*dim = builder.getInt16Ty(),
-		*contents = variant_type->getPointerTo();
-	Type *var[] = { dim, dim, contents };
-	var_type = StructType::create(var, "struct.var");
-
-	scope_type = StructType::create(context, "struct.scope")->getPointerTo();
-
-	// runtime functions
-	// todo: put these in a library like the GML standard library
-	FunctionType *to_real_type = FunctionType::get(
-		real_type, variant_type->getPointerTo(), false
-	);
 	to_real = Function::Create(
-		to_real_type, Function::ExternalLinkage, "to_real", &module
-	);
-
-	FunctionType *to_str_type = FunctionType::get(
-		string_type, variant_type->getPointerTo(), false
+		runtime.getFunction("to_real")->getFunctionType(),
+		Function::ExternalLinkage, "to_real", &module
 	);
 	to_string = Function::Create(
-		to_str_type, Function::ExternalLinkage, "to_string", &module
+		runtime.getFunction("to_string")->getFunctionType(),
+		Function::ExternalLinkage, "to_string", &module
 	);
-
-	FunctionType *intern_type = FunctionType::get(string_type, string_type);
 	intern = Function::Create(
-		intern_type, Function::ExternalLinkage, "intern", &module
-	);
-
-	Type *access_args[] = {
-		var_type->getPointerTo(),
-		builder.getInt16Ty(), builder.getInt16Ty(), builder.getInt1Ty()
-	};
-	FunctionType *access_type = FunctionType::get(
-		variant_type->getPointerTo(), access_args, false
+		runtime.getFunction("intern")->getFunctionType(),
+		Function::ExternalLinkage, "intern", &module
 	);
 	access = Function::Create(
-		access_type, Function::ExternalLinkage, "access", &module
-	);
-
-	Type *retain_args[] = { variant_type->getPointerTo() };
-	FunctionType *retain_type = FunctionType::get(
-		builder.getVoidTy(), retain_args, false
+		runtime.getFunction("access")->getFunctionType(),
+		Function::ExternalLinkage, "access", &module
 	);
 	retain = Function::Create(
-		retain_type, Function::ExternalLinkage, "retain", &module
-	);
-
-	Type *release_args[] = { variant_type->getPointerTo() };
-	FunctionType *release_type = FunctionType::get(
-		builder.getVoidTy(), release_args, false
+		runtime.getFunction("retain")->getFunctionType(),
+		Function::ExternalLinkage, "retain", &module
 	);
 	release = Function::Create(
-		release_type, Function::ExternalLinkage, "release", &module
-	);
-
-	Type *retain_var_args[] = { var_type->getPointerTo() };
-	FunctionType *retain_var_type = FunctionType::get(
-		builder.getVoidTy(), retain_var_args, false
+		runtime.getFunction("release")->getFunctionType(),
+		Function::ExternalLinkage, "release", &module
 	);
 	retain_var = Function::Create(
-		retain_var_type, Function::ExternalLinkage, "retain_var", &module
-	);
-
-	Type *release_var_args[] = { var_type->getPointerTo() };
-	FunctionType *release_var_type = FunctionType::get(
-		builder.getVoidTy(), release_var_args, false
+		runtime.getFunction("retain_var")->getFunctionType(),
+		Function::ExternalLinkage, "retain_var", &module
 	);
 	release_var = Function::Create(
-		release_var_type, Function::ExternalLinkage, "release_var", &module
-	);
-
-	Type *insert_globalvar_args[] = { string_type };
-	FunctionType *insert_globalvar_type = FunctionType::get(
-		builder.getVoidTy(), insert_globalvar_args, false
+		runtime.getFunction("release_var")->getFunctionType(),
+		Function::ExternalLinkage, "release_var", &module
 	);
 	insert_globalvar = Function::Create(
-		insert_globalvar_type,
+		runtime.getFunction("insert_globalvar")->getFunctionType(),
 		Function::ExternalLinkage, "insert_globalvar", &module
 	);
-
-	Type *lookup_default_args[] = {
-		scope_type, scope_type, string_type, builder.getInt1Ty()
-	};
-	FunctionType *lookup_default_type = FunctionType::get(
-		var_type->getPointerTo(), lookup_default_args, false
-	);
 	lookup_default = Function::Create(
-		lookup_default_type, Function::ExternalLinkage,
-		"lookup_default", &module
-	);
-
-	Type *lookup_args[] = {
-		scope_type, scope_type, real_type, string_type, builder.getInt1Ty()
-	};
-	FunctionType *lookup_type = FunctionType::get(
-		var_type->getPointerTo(), lookup_args, false
+		runtime.getFunction("lookup_default")->getFunctionType(),
+		Function::ExternalLinkage, "lookup_default", &module
 	);
 	lookup = Function::Create(
-		lookup_type, Function::ExternalLinkage, "lookup", &module
+		runtime.getFunction("lookup")->getFunctionType(),
+		Function::ExternalLinkage, "lookup", &module
 	);
 
-	// todo: should there be a separate with_iterator type?
-	Type *with_begin_args[] = {
-		scope_type, scope_type, variant_type->getPointerTo()
-	};
-	FunctionType *with_begin_type = FunctionType::get(
-		scope_type, with_begin_args, false
-	);
-	with_begin = Function::Create(
-		with_begin_type, Function::ExternalLinkage, "with_begin", &module
-	);
-
-	Type *with_inc_args[] = {
-		scope_type, scope_type, variant_type->getPointerTo(), scope_type
-	};
-	FunctionType *with_inc_type = FunctionType::get(
-		scope_type, with_inc_args, false
+	// todo: implement these
+	/*with_begin = Function::Create(
+		runtime.getFunction("with_begin")->getFunctionType(),
+		Function::ExternalLinkage, "with_begin", &module
 	);
 	with_inc = Function::Create(
-		with_inc_type, Function::ExternalLinkage, "with_inc", &module
-	);
+		runtime.getFunction("with_inc")->getFunctionType(),
+		Function::ExternalLinkage, "with_inc", &module
+	);*/
 }
 
 namespace {
@@ -278,7 +196,7 @@ Value *node_codegen::visit_unary(unary *u) {
 
 	Value *result = alloc(variant_type);
 	Value *operand = alloc(variant_type);
-	builder.CreateMemCpy(operand, visit(u->right), dl->getTypeStoreSize(variant_type), 0);
+	builder.CreateMemCpy(operand, visit(u->right), dl.getTypeStoreSize(variant_type), 0);
 
 	CallInst *call = builder.CreateCall(get_operator(name, 1), operand);
 
@@ -337,8 +255,8 @@ Value *node_codegen::visit_binary(binary *b) {
 	Value *left = alloc(variant_type);
 	Value *right = alloc(variant_type);
 	Value *result = alloc(variant_type);
-	builder.CreateMemCpy(left, visit(b->left), dl->getTypeStoreSize(variant_type), 0);
-	builder.CreateMemCpy(right, visit(b->right), dl->getTypeStoreSize(variant_type), 0);
+	builder.CreateMemCpy(left, visit(b->left), dl.getTypeStoreSize(variant_type), 0);
+	builder.CreateMemCpy(right, visit(b->right), dl.getTypeStoreSize(variant_type), 0);
 
 	CallInst *call = builder.CreateCall2(get_operator(name, 2), left, right);
 
@@ -416,7 +334,7 @@ Value *node_codegen::visit_call(call *c) {
 		Value *indices[] = { builder.getInt32(i) };
 		Value *arg = builder.CreateInBoundsGEP(array, indices);
 		builder.CreateMemCpy(
-			arg, visit(c->args[i]), dl->getTypeStoreSize(variant_type), 0
+			arg, visit(c->args[i]), dl.getTypeStoreSize(variant_type), 0
 		);
 
 		if (!var) args.push_back(arg);
@@ -459,7 +377,7 @@ Value *node_codegen::visit_assignment(assignment *a) {
 	}
 
 	builder.CreateCall(release, l);
-	builder.CreateMemCpy(l, r, dl->getTypeStoreSize(variant_type), 0);
+	builder.CreateMemCpy(l, r, dl.getTypeStoreSize(variant_type), 0);
 	builder.CreateCall(retain, l);
 	return 0;
 }
@@ -886,7 +804,7 @@ Value *node_codegen::get_string(StringRef val) {
 		literal = string_literals[val];
 	}
 	else {
-		Type *size_type = builder.getIntPtrTy(dl);
+		Type *size_type = builder.getIntPtrTy(&dl);
 
 		Constant *contents[] = {
 			ConstantInt::get(size_type, 0, false), // refcount
@@ -915,7 +833,9 @@ Value *node_codegen::get_string(StringRef val) {
 		builder.CreateInBoundsGEP(variant, sindices),
 		string_type->getPointerTo()
 	);
-	builder.CreateStore(builder.CreateCall(intern, literal), string);
+	builder.CreateStore(builder.CreateCall(
+		intern, builder.CreateBitCast(literal, string_type)
+	), string);
 
 	return variant;
 }

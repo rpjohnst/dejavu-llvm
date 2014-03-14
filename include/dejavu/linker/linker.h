@@ -25,10 +25,13 @@ private:
 		const std::string &name, int args, bool var
 	);
 
+	llvm::Module *get_runtime(const char *runtime);
+
 	game &source;
 	error_stream &errors;
 
-	const llvm::DataLayout *dl;
+	llvm::LLVMContext context;
+	std::unique_ptr<llvm::Module> runtime;
 	node_codegen compiler;
 };
 

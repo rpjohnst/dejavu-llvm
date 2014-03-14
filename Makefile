@@ -17,7 +17,7 @@ clean:
 # toolchain configuration
 
 CXX := clang++
-CXXFLAGS := -Wall -Wextra -Wno-unused-parameter -g
+CXXFLAGS := -Wall -Wextra -Wno-unused-parameter
 LLVM_PREFIX :=
 
 # build the interface
@@ -54,7 +54,7 @@ dejavu.so: $(library_OBJECTS)
 	$(CXX) $(library_LDFLAGS) -o $@ $^ $(library_LDLIBS)
 
 %.o: %.cc
-	$(CXX) -c -std=c++11 -Iinclude -MMD -MP $(CXXFLAGS) $(library_CXXFLAGS) $(library_CPPFLAGS) -o $@ $<
+	$(CXX) -c -std=c++11 -Iinclude -MMD -MP $(CXXFLAGS) -g $(library_CXXFLAGS) $(library_CPPFLAGS) -o $@ $<
 
 # build the runtime
 
@@ -79,7 +79,7 @@ t_DEPENDS := $(t_SOURCES:.cc=.d)
 t_LDLIBS := -lgtest -lgtest_main
 
 test/%.o: test/%.cc
-	$(CXX) -c -std=c++11 -Iinclude -MMD -MP $(CXXFLAGS) $(t_CXXFLAGS) $(t_CPPFLAGS) -o $@ $<
+	$(CXX) -c -std=c++11 -Iinclude -MMD -MP $(CXXFLAGS) -g $(t_CXXFLAGS) $(t_CPPFLAGS) -o $@ $<
 
 t: $(t_OBJECTS)
 	$(CXX) $(t_LDFLAGS) -o $@ $^ $(t_LDLIBS)
