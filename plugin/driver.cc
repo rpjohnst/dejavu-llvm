@@ -65,11 +65,19 @@ private:
 llvm::llvm_shutdown_obj y;
 
 // todo: replace debug with configuration struct
-bool compile(const char *target, game &source, build_log &log, bool debug) {
+bool compile(
+	const char *output, const char *target,
+	game &source, build_log &log, bool debug
+) {
 	error_printer errors(log);
 
 	llvm::InitializeNativeTarget();
+
+	// we need a new context for every compilation or LLVM chokes on types
+	llvm::LLVMContext context;
+
 	return linker(
-		source, llvm::sys::getDefaultTargetTriple(), errors
+		output, source, errors,
+		llvm::sys::getDefaultTargetTriple(), context
 	).build(target, debug);
 }

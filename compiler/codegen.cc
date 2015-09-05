@@ -8,16 +8,18 @@
 
 using namespace llvm;
 
-node_codegen::node_codegen(
-	LLVMContext &context, const Module &runtime, error_stream &e
-) : context(context), runtime(runtime), dl(&runtime),
-	builder(context), module("", context), errors(e) {
+node_codegen::node_codegen(const Module &runtime, error_stream &e) :
+	dl(&runtime), builder(runtime.getContext()), module("", runtime.getContext()), errors(e) {
 
 	real_type = builder.getDoubleTy();
+
 	string_type = runtime.getTypeByName("struct.string")->getPointerTo();
 	variant_type = runtime.getTypeByName("struct.variant");
 	var_type = runtime.getTypeByName("struct.var");
 	scope_type = runtime.getTypeByName("struct.scope")->getPointerTo();
+
+	union_diff =
+		dl.getTypeAllocSize(real_type) - dl.getTypeAllocSize(string_type);
 
 	// todo: create a gml calling convention for the runtime
 	to_real = Function::Create(
@@ -104,7 +106,7 @@ Function *node_codegen::add_function(
 	self_scope = ai;
 	other_scope = ++ai;
 
-	BasicBlock *entry = BasicBlock::Create(context);
+	BasicBlock *entry = BasicBlock::Create(function->getContext());
 
 	scope.clear();
 	alloca_point = new BitCastInst(
@@ -428,9 +430,9 @@ Value *node_codegen::visit_block(block *b) {
 
 Value *node_codegen::visit_ifstatement(ifstatement *i) {
 	Function *f = builder.GetInsertBlock()->getParent();
-	BasicBlock *branch_true = BasicBlock::Create(context, "then");
-	BasicBlock *branch_false = BasicBlock::Create(context, "else");
-	BasicBlock *merge = BasicBlock::Create(context, "merge");
+	BasicBlock *branch_true = BasicBlock::Create(f->getContext(), "then");
+	BasicBlock *branch_false = BasicBlock::Create(f->getContext(), "else");
+	BasicBlock *merge = BasicBlock::Create(f->getContext(), "merge");
 
 	builder.CreateCondBr(to_bool(i->cond), branch_true, branch_false);
 
@@ -453,9 +455,9 @@ Value *node_codegen::visit_ifstatement(ifstatement *i) {
 
 Value *node_codegen::visit_whilestatement(whilestatement *w) {
 	Function *f = builder.GetInsertBlock()->getParent();
-	BasicBlock *loop = BasicBlock::Create(context, "loop");
-	BasicBlock *cond = BasicBlock::Create(context, "cond");
-	BasicBlock *after = BasicBlock::Create(context, "after");
+	BasicBlock *loop = BasicBlock::Create(f->getContext(), "loop");
+	BasicBlock *cond = BasicBlock::Create(f->getContext(), "cond");
+	BasicBlock *after = BasicBlock::Create(f->getContext(), "after");
 
 	builder.CreateBr(cond);
 
@@ -481,9 +483,9 @@ Value *node_codegen::visit_whilestatement(whilestatement *w) {
 
 Value *node_codegen::visit_dostatement(dostatement *d) {
 	Function *f = builder.GetInsertBlock()->getParent();
-	BasicBlock *loop = BasicBlock::Create(context, "loop");
-	BasicBlock *cond = BasicBlock::Create(context, "cond");
-	BasicBlock *after = BasicBlock::Create(context, "after");
+	BasicBlock *loop = BasicBlock::Create(f->getContext(), "loop");
+	BasicBlock *cond = BasicBlock::Create(f->getContext(), "cond");
+	BasicBlock *after = BasicBlock::Create(f->getContext(), "after");
 
 	builder.CreateBr(loop);
 
@@ -509,8 +511,8 @@ Value *node_codegen::visit_dostatement(dostatement *d) {
 
 Value *node_codegen::visit_repeatstatement(repeatstatement *r) {
 	Function *f = builder.GetInsertBlock()->getParent();
-	BasicBlock *loop = BasicBlock::Create(context, "loop");
-	BasicBlock *after = BasicBlock::Create(context, "after");
+	BasicBlock *loop = BasicBlock::Create(f->getContext(), "loop");
+	BasicBlock *after = BasicBlock::Create(f->getContext(), "after");
 	BasicBlock *init = builder.GetInsertBlock();
 
 	Value *start = ConstantFP::get(builder.getDoubleTy(), 0);
@@ -544,10 +546,10 @@ Value *node_codegen::visit_repeatstatement(repeatstatement *r) {
 
 Value *node_codegen::visit_forstatement(forstatement *f) {
 	Function *fn = builder.GetInsertBlock()->getParent();
-	BasicBlock *loop = BasicBlock::Create(context, "loop");
-	BasicBlock *cond = BasicBlock::Create(context, "cond");
-	BasicBlock *inc = BasicBlock::Create(context, "inc");
-	BasicBlock *after = BasicBlock::Create(context, "after");
+	BasicBlock *loop = BasicBlock::Create(fn->getContext(), "loop");
+	BasicBlock *cond = BasicBlock::Create(fn->getContext(), "cond");
+	BasicBlock *inc = BasicBlock::Create(fn->getContext(), "inc");
+	BasicBlock *after = BasicBlock::Create(fn->getContext(), "after");
 
 	visit(f->init);
 	builder.CreateBr(cond);
@@ -579,11 +581,11 @@ Value *node_codegen::visit_forstatement(forstatement *f) {
 
 // todo: can this be refactored to reuse the forstatement codegen?
 Value *node_codegen::visit_withstatement(withstatement *w) {
-	Function *fn = builder.GetInsertBlock()->getParent();
-	BasicBlock *loop = BasicBlock::Create(context, "loop");
-	BasicBlock *cond = BasicBlock::Create(context, "cond");
-	BasicBlock *inc = BasicBlock::Create(context, "inc");
-	BasicBlock *after = BasicBlock::Create(context, "after");
+	Function *f = builder.GetInsertBlock()->getParent();
+	BasicBlock *loop = BasicBlock::Create(f->getContext(), "loop");
+	BasicBlock *cond = BasicBlock::Create(f->getContext(), "cond");
+	BasicBlock *inc = BasicBlock::Create(f->getContext(), "inc");
+	BasicBlock *after = BasicBlock::Create(f->getContext(), "after");
 
 	Value *with_expr = visit(w->expr);
 	Value *instance = alloc(scope_type);
@@ -591,13 +593,13 @@ Value *node_codegen::visit_withstatement(withstatement *w) {
 	builder.CreateStore(init, instance);
 	builder.CreateBr(cond);
 
-	fn->getBasicBlockList().push_back(cond);
+	f->getBasicBlockList().push_back(cond);
 	builder.SetInsertPoint(cond);
 	Value *with_end = ConstantPointerNull::get(scope_type);
 	Value *with_cond = builder.CreateICmpNE(builder.CreateLoad(instance), with_end);
 	builder.CreateCondBr(with_cond, loop, after);
 
-	fn->getBasicBlockList().push_back(loop);
+	f->getBasicBlockList().push_back(loop);
 	builder.SetInsertPoint(loop);
 	{
 		save_context<BasicBlock*, BasicBlock*, Value*, Value*> save(
@@ -611,7 +613,7 @@ Value *node_codegen::visit_withstatement(withstatement *w) {
 	}
 	builder.CreateBr(inc);
 
-	fn->getBasicBlockList().push_back(inc);
+	f->getBasicBlockList().push_back(inc);
 	builder.SetInsertPoint(inc);
 	Value *with_next = builder.CreateCall4(
 		with_inc, self_scope, other_scope, with_expr, builder.CreateLoad(instance)
@@ -619,7 +621,7 @@ Value *node_codegen::visit_withstatement(withstatement *w) {
 	builder.CreateStore(with_next, instance);
 	builder.CreateBr(cond);
 
-	fn->getBasicBlockList().push_back(after);
+	f->getBasicBlockList().push_back(after);
 	builder.SetInsertPoint(after);
 
 	return 0;
@@ -627,15 +629,15 @@ Value *node_codegen::visit_withstatement(withstatement *w) {
 
 // todo: switch on a hash rather than generating an if/else chain
 Value *node_codegen::visit_switchstatement(switchstatement *s) {
-	Function *fn = builder.GetInsertBlock()->getParent();
-	BasicBlock *switch_default = BasicBlock::Create(context, "default");
-	BasicBlock *dead = BasicBlock::Create(context, "dead");
-	BasicBlock *after = BasicBlock::Create(context, "after");
+	Function *f = builder.GetInsertBlock()->getParent();
+	BasicBlock *switch_default = BasicBlock::Create(f->getContext(), "default");
+	BasicBlock *dead = BasicBlock::Create(f->getContext(), "dead");
+	BasicBlock *after = BasicBlock::Create(f->getContext(), "after");
 
 	Value *switch_expr = visit(s->expr);
 	Function::iterator switch_cond = builder.GetInsertBlock();
 
-	fn->getBasicBlockList().push_back(dead);
+	f->getBasicBlockList().push_back(dead);
 	builder.SetInsertPoint(dead);
 	{
 		save_context<Value*, BasicBlock*, Function::iterator, BasicBlock*> save(
@@ -650,35 +652,35 @@ Value *node_codegen::visit_switchstatement(switchstatement *s) {
 		builder.SetInsertPoint(current_cond);
 		builder.CreateBr(current_default);
 
-		builder.SetInsertPoint(&fn->getBasicBlockList().back());
+		builder.SetInsertPoint(&f->getBasicBlockList().back());
 		if (!current_default->getParent()) {
 			builder.CreateBr(current_default);
 
-			fn->getBasicBlockList().push_back(current_default);
+			f->getBasicBlockList().push_back(current_default);
 			builder.SetInsertPoint(current_default);
 		}
 	}
 	builder.CreateBr(after);
 
-	fn->getBasicBlockList().push_back(after);
+	f->getBasicBlockList().push_back(after);
 	builder.SetInsertPoint(after);
 
 	return 0;
 }
 
 Value *node_codegen::visit_casestatement(casestatement *c) {
-	Function *fn = builder.GetInsertBlock()->getParent();
+	Function *f = builder.GetInsertBlock()->getParent();
 
 	if (!c->expr) {
 		builder.CreateBr(current_default);
-		fn->getBasicBlockList().push_back(current_default);
+		f->getBasicBlockList().push_back(current_default);
 		builder.SetInsertPoint(current_default);
 
 		return 0;
 	}
 
-	BasicBlock *switch_case = BasicBlock::Create(context, "case");
-	BasicBlock *next_cond = BasicBlock::Create(context, "next");
+	BasicBlock *switch_case = BasicBlock::Create(f->getContext(), "case");
+	BasicBlock *next_cond = BasicBlock::Create(f->getContext(), "next");
 
 	builder.SetInsertPoint(current_cond);
 
@@ -686,13 +688,13 @@ Value *node_codegen::visit_casestatement(casestatement *c) {
 	Value *cond = is_equal(current_switch, case_expr);
 	builder.CreateCondBr(cond, switch_case, next_cond);
 
-	fn->getBasicBlockList().insertAfter(current_cond, next_cond);
+	f->getBasicBlockList().insertAfter(current_cond, next_cond);
 	current_cond = next_cond;
 
-	builder.SetInsertPoint(&fn->getBasicBlockList().back());
+	builder.SetInsertPoint(&f->getBasicBlockList().back());
 	builder.CreateBr(switch_case);
 
-	fn->getBasicBlockList().push_back(switch_case);
+	f->getBasicBlockList().push_back(switch_case);
 	builder.SetInsertPoint(switch_case);
 
 	return 0;
@@ -714,7 +716,7 @@ Value *node_codegen::visit_jump(jump *j) {
 	}
 
 	Function *f = builder.GetInsertBlock()->getParent();
-	BasicBlock *cont = BasicBlock::Create(context, "cont", f);
+	BasicBlock *cont = BasicBlock::Create(f->getContext(), "cont", f);
 	builder.SetInsertPoint(cont);
 
 	return 0;
@@ -724,7 +726,7 @@ Value *node_codegen::visit_returnstatement(returnstatement *r) {
 	builder.CreateRet(builder.CreateLoad(visit(r->expr)));
 
 	Function *f = builder.GetInsertBlock()->getParent();
-	BasicBlock *cont = BasicBlock::Create(context, "cont", f);
+	BasicBlock *cont = BasicBlock::Create(f->getContext(), "cont", f);
 	builder.SetInsertPoint(cont);
 
 	return 0;
@@ -813,7 +815,7 @@ Value *node_codegen::get_string(StringRef val) {
 				size_type, string::compute_hash(val.size(), val.data()), false
 			),
 			ConstantInt::get(size_type, val.size()), // length
-			ConstantDataArray::getString(context, val, false) // data
+			ConstantDataArray::getString(module.getContext(), val, false) // data
 		};
 		Constant *s = ConstantStruct::getAnon(contents);
 		literal = new GlobalVariable(

@@ -8,12 +8,12 @@
 
 #include <llvm/PassManager.h>
 #include <llvm/Analysis/Passes.h>
-#include <llvm/Analysis/Verifier.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
-#include <llvm/Linker.h>
+#include <llvm/Linker/Linker.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Bitcode/ReaderWriter.h>
 
@@ -22,22 +22,26 @@
 #include <llvm/IR/DataLayout.h>
 
 #include <llvm/Support/ToolOutputFile.h>
-#include <llvm/ADT/OwningPtr.h>
+#include <llvm/Support/FileSystem.h>
 
 #include <sstream>
 #include <algorithm>
+#include <memory>
 
 using namespace llvm;
 
-Module *linker::get_runtime(const char *runtime) {
-	OwningPtr<MemoryBuffer> rt;
-	MemoryBuffer::getFile(runtime, rt);
-	return ParseBitcodeFile(rt.get(), context);
+static Module *load_module(const char *filename, LLVMContext &context) {
+	std::unique_ptr<MemoryBuffer> file = std::move(MemoryBuffer::getFile(filename).get());
+	return getLazyBitcodeModule(std::move(file), context).get();
 }
 
-linker::linker(game &g, const std::string &triple, error_stream &e) :
-	source(g), errors(e), runtime(get_runtime("runtime.bc")),
-	compiler(context, *runtime.get(), errors) {}
+linker::linker(
+	const char *output, game &g, error_stream &e,
+	const std::string &triple, LLVMContext &context
+) : context(context), runtime(load_module("runtime.bc", context)),
+	output(output), source(g), errors(e), compiler(*runtime, errors) {
+	verifyModule(*runtime);
+}
 
 bool linker::build(const char *target, bool debug) {
 	errors.progress(20, "compiling libraries");
@@ -51,37 +55,70 @@ bool linker::build(const char *target, bool debug) {
 
 	if (errors.count() > 0) return false;
 
-	errors.progress(60, "linking runtime");
 	Module &game = compiler.get_module();
-	Linker::LinkModules(&game, runtime.get(), Linker::PreserveSource, NULL);
-
-	PassManager pm;
-	pm.add(createVerifierPass());
-
-	if (!debug) {
-		errors.progress(80, "optimizing game");
-
-		PassManagerBuilder pmb;
-		pmb.OptLevel = 3;
-
-		pmb.populateModulePassManager(pm);
-		pmb.populateLTOPassManager(pm, true, true);
-	}
-
-	std::string error_info;
-	std::unique_ptr<tool_output_file> out(
-		new tool_output_file(target, error_info, sys::fs::F_None)
-	);
-	if (!error_info.empty()) {
-		errors.error(error_info);
+	if (verifyModule(game)) {
+		errors.error("module is broken\n");
 		return false;
 	}
-	pm.add(createBitcodeWriterPass(out->os()));
 
-	pm.run(game);
-	out->keep();
+	if (!debug) {
+		PassManager pm;
+		PassManagerBuilder pmb;
+		pmb.populateModulePassManager(pm);
+		pm.run(game);
+	}
+
+	{
+		std::error_code error;
+		std::ostringstream f; f << output << "/objects.bc";
+		tool_output_file out(f.str(), error, sys::fs::F_None);
+		if (error) {
+			errors.error(error.message());
+			return false;
+		}
+
+		WriteBitcodeToFile(&game, out.os());
+		out.keep();
+	}
+
+	errors.progress(60, "linking runtime");
+	link(target, debug);
 
 	return errors.count() == 0;
+}
+
+static void diagnostic_handler(const DiagnosticInfo &DI) {
+	fprintf(stderr, "AUGHERASER\n");
+}
+
+bool linker::link(const char *target, bool debug) {
+	std::ostringstream f; f << output << "/objects.bc";
+	std::unique_ptr<Module> objects(load_module(f.str().c_str(), context));
+
+	std::unique_ptr<Module> game = std::make_unique<Module>("game", context);
+	Linker L(game.get(), &diagnostic_handler);
+	if (L.linkInModule(objects.get()) || L.linkInModule(runtime.get()))
+		errors.error("failed to link with runtime");
+
+	if (!debug) {
+		PassManager pm;
+		PassManagerBuilder pmb;
+		pmb.OptLevel = 3;
+		pmb.populateLTOPassManager(pm);
+		pm.run(*game);
+	}
+
+	std::error_code error;
+	tool_output_file out(target, error, sys::fs::F_None);
+	if (error) {
+		errors.error(error.message());
+		return false;
+	}
+
+	WriteBitcodeToFile(game.get(), out.os());
+	out.keep();
+
+	return true;
 }
 
 void linker::build_libraries() {

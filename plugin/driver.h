@@ -14,6 +14,9 @@ protected:
 	build_log() {}
 };
 
-bool compile(const char *target, game &source, build_log &log, bool debug);
+bool compile(
+	const char *output, const char *target,
+	game &source, build_log &log, bool debug
+);
 
 #endif

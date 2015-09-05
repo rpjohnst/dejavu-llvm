@@ -56,7 +56,7 @@ keyword_table::keyword_table() {
 }
 
 token_stream::token_stream(buffer &b) :
-	row(1), col(1), source(b), current(b.begin()), buffer_end(b.end()) {
+	row(1), col(1), current(b.begin()), buffer_end(b.end()) {
 }
 
 token token_stream::gettoken() {

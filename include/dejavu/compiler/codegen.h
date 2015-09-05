@@ -3,7 +3,6 @@
 
 #include <dejavu/compiler/node_visitor.h>
 #include <dejavu/compiler/error_stream.h>
-#include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
 #include <llvm/ADT/StringMap.h>
@@ -13,10 +12,7 @@
 
 class node_codegen : public node_visitor<node_codegen, llvm::Value*> {
 public:
-	node_codegen(
-		llvm::LLVMContext &context, const llvm::Module &runtime,
-		error_stream &e
-	);
+	node_codegen(const llvm::Module &runtime, error_stream &e);
 	llvm::Function *add_function(
 		node*, const char *name, size_t nargs, bool var
 	);
@@ -73,8 +69,6 @@ private:
 		llvm::Value *right, bool lvalue
 	);
 
-	llvm::LLVMContext &context;
-	const llvm::Module &runtime;
 	const llvm::DataLayout dl;
 
 	llvm::IRBuilder<> builder;

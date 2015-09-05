@@ -9,6 +9,7 @@ import java.awt.*;
 import javax.swing.*;
 import java.net.*;
 import java.io.*;
+import java.nio.file.Files;
 import java.util.*;
 
 public class Runner implements ActionListener, LGM.ReloadListener {
@@ -102,7 +103,7 @@ public class Runner implements ActionListener, LGM.ReloadListener {
 		return new ImageIcon(url);
 	}
 
-	private synchronized boolean build(File target, boolean debug) {
+	private synchronized boolean build(File output, File target, boolean debug) {
 		progress.reset();
 		progress.message("writing game data");
 		LGM.commitAll();
@@ -114,7 +115,10 @@ public class Runner implements ActionListener, LGM.ReloadListener {
 			"building " + source.getName() + " (" + source.getVersion() + ")" +
 			" to " + target.getPath() + "\n"
 		);
-		boolean success = dejavu.compile(target.getPath(), source, progress.new Log(), debug);
+		boolean success = dejavu.compile(
+			output.getPath(), target.getPath(),
+			source, progress.new Log(), debug
+		);
 
 		if (success) {
 			progress.percent(100);
@@ -138,40 +142,58 @@ public class Runner implements ActionListener, LGM.ReloadListener {
 		File file = save.getSelectedFile();
 		if (!file.getName().endsWith(ext)) file = new File(file.getPath() + ext);
 
-		final File target = file;
-		new Thread() { public void run() {
-			build(target, false);
-		} }.start();
-	}
-
-	private void run() {
-		final File target;
+		// todo: factor this out and do it per-project
+		final File output;
 		try {
-			target = File.createTempFile("djv", "");
+			output = Files.createTempDirectory("djv").toFile();
 		}
 		catch (IOException e) {
 			e.printStackTrace();
 			return;
 		}
 
+		final File target = file;
 		new Thread() { public void run() {
-			boolean success = build(target, false);
+			build(output, target, false);
+		} }.start();
+	}
+
+	private void run() {
+		final File output;
+		try {
+			output = Files.createTempDirectory("djv").toFile();
+		}
+		catch (IOException e) {
+			e.printStackTrace();
+			return;
+		}
+
+		final File target = new File(
+			output.getPath() + File.separatorChar + "game"
+		);
+
+		new Thread() { public void run() {
+			boolean success = build(output, target, false);
 			if (success) progress.append("run " + target.getPath() + "\n");
 		} }.start();
 	}
 
 	private void debug() {
-		final File target;
+		final File output;
 		try {
-			target = File.createTempFile("djv", "");
+			output = Files.createTempDirectory("djv").toFile();
 		}
 		catch (IOException e) {
 			e.printStackTrace();
 			return;
 		}
 
+		final File target = new File(
+			output.getPath() + File.separatorChar + "game"
+		);
+
 		new Thread() { public void run() {
-			boolean success = build(target, true);
+			boolean success = build(output, target, true);
 			if (success) progress.append("debug " + target.getPath() + "\n");
 		} }.start();
 	}

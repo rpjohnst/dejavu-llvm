@@ -1,7 +1,6 @@
 #include <dejavu/runtime/error.h>
 #include <cstdio>
 #include <cstdlib>
-#include <cstdarg>
 
 struct scope;
 

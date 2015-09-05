@@ -47,8 +47,6 @@ private:
 	token getstring();
 
 	size_t row, col;
-
-	buffer &source;
 	const char *current, *buffer_end;
 };
 

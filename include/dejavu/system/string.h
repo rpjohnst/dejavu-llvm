@@ -13,7 +13,7 @@ struct string final {
 
 	string(size_t l) : length(l) {}
 	string(size_t l, const char *d);
-	static void *operator new(size_t s, size_t len = 0) {
+	static void *operator new(size_t s, int len = 0) {
 		return ::operator new(s + len);
 	}
 

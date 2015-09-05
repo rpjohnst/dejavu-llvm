@@ -12,10 +12,15 @@ namespace llvm {
 
 class linker {
 public:
-	linker(game&, const std::string &triple, error_stream&);
+	linker(
+		const char *output, game&, error_stream&,
+		const std::string &triple, llvm::LLVMContext &context
+	);
 	bool build(const char *target, bool debug);
 
 private:
+	bool link(const char *target, bool debug);
+
 	void build_libraries();
 	void build_scripts();
 	void build_objects();
@@ -25,13 +30,12 @@ private:
 		const std::string &name, int args, bool var
 	);
 
-	llvm::Module *get_runtime(const char *runtime);
+	llvm::LLVMContext &context;
+	std::unique_ptr<llvm::Module> runtime;
+	const char *output;
 
 	game &source;
 	error_stream &errors;
-
-	llvm::LLVMContext context;
-	std::unique_ptr<llvm::Module> runtime;
 	node_codegen compiler;
 };
 

@@ -3,7 +3,7 @@
 TARGETS := dejavu.jar dejavu.so runtime.bc t
 
 .PHONY: all
-all: $(TARGETS) test
+all: $(filter-out t,$(TARGETS))
 
 .PHONY: test
 test: t
@@ -17,7 +17,7 @@ clean:
 # toolchain configuration
 
 CXX := clang++
-CXXFLAGS := -Wall -Wextra -Wno-unused-parameter
+CXXFLAGS := -Wall -Wextra -Wno-unused-parameter -g
 LLVM_PREFIX :=
 
 # build the interface
@@ -48,13 +48,13 @@ library_DEPENDS := $(library_SOURCES:.cc=.d)
 library_CXXFLAGS := -fpic
 library_CPPFLAGS := $(shell $(LLVM_PREFIX)llvm-config --cppflags) -I$(JAVA_HOME)/include{,/linux}
 library_LDFLAGS := -shared $(shell $(LLVM_PREFIX)llvm-config --ldflags)
-library_LDLIBS := $(shell $(LLVM_PREFIX)llvm-config --libs core native scalaropts ipo linker bitreader bitwriter)
+library_LDLIBS := $(shell $(LLVM_PREFIX)llvm-config --libs core native scalaropts ipo linker bitreader bitwriter irreader)
 
 dejavu.so: $(library_OBJECTS)
 	$(CXX) $(library_LDFLAGS) -o $@ $^ $(library_LDLIBS)
 
 %.o: %.cc
-	$(CXX) -c -std=c++11 -Iinclude -MMD -MP $(CXXFLAGS) -g $(library_CXXFLAGS) $(library_CPPFLAGS) -o $@ $<
+	$(CXX) -c -std=c++14 -Iinclude -MMD -MP $(CXXFLAGS) $(library_CXXFLAGS) $(library_CPPFLAGS) -o $@ $<
 
 # build the runtime
 
@@ -68,7 +68,7 @@ runtime.bc: $(runtime_OBJECTS)
 	$(LLVM_PREFIX)llvm-link -o $@ $^
 
 %.bc: %.cc
-	$(CXX) -c -emit-llvm -std=c++11 -Iinclude $(DEPFLAGS) $(CXXFLAGS) $(runtime_CXXFLAGS) -o $@ $<
+	$(CXX) -c -emit-llvm -std=c++14 -Iinclude $(DEPFLAGS) $(CXXFLAGS) $(runtime_CXXFLAGS) -o $@ $<
 
 # build the tests
 
@@ -79,7 +79,7 @@ t_DEPENDS := $(t_SOURCES:.cc=.d)
 t_LDLIBS := -lgtest -lgtest_main
 
 test/%.o: test/%.cc
-	$(CXX) -c -std=c++11 -Iinclude -MMD -MP $(CXXFLAGS) -g $(t_CXXFLAGS) $(t_CPPFLAGS) -o $@ $<
+	$(CXX) -c -std=c++14 -Iinclude -MMD -MP $(CXXFLAGS) $(t_CXXFLAGS) $(t_CPPFLAGS) -o $@ $<
 
 t: $(t_OBJECTS)
 	$(CXX) $(t_LDFLAGS) -o $@ $^ $(t_LDLIBS)
