@@ -69,6 +69,7 @@ private:
 		llvm::Value *right, bool lvalue
 	);
 
+	const llvm::Module &runtime;
 	const llvm::DataLayout dl;
 
 	llvm::IRBuilder<> builder;
@@ -83,6 +84,7 @@ private:
 	llvm::PointerType *scope_type;
 	llvm::StructType *var_type;
 	llvm::StructType *variant_type;
+	llvm::StructType *ret_type;
 	llvm::Type *real_type;
 	llvm::Type *string_type;
 	int union_diff;

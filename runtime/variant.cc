@@ -157,7 +157,6 @@ BINARY_OP(plus_real_real) { return a.real + b.real; }
 BINARY_OP(plus_string_string) {
 	size_t length = a.string->length + b.string->length;
 	string *str = new (length) string(length);
-	str->retain();
 
 	memcpy((void*)str->data, (void*)a.string->data, a.string->length);
 	memcpy((void*)(str->data + a.string->length), (void*)b.string->data, b.string->length);
@@ -165,7 +164,8 @@ BINARY_OP(plus_string_string) {
 
 	string *ret = strings.intern(str);
 	ret->retain();
-	str->release();
+
+	if (str != ret) delete str;
 	return ret;
 }
 BINARY_ERROR(plus, +)

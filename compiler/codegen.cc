@@ -9,14 +9,17 @@
 using namespace llvm;
 
 node_codegen::node_codegen(const Module &runtime, error_stream &e) :
-	dl(&runtime), builder(runtime.getContext()), module("", runtime.getContext()), errors(e) {
+	runtime(runtime), dl(&runtime),
+	builder(runtime.getContext()), module("", runtime.getContext()), errors(e) {
+
+	scope_type = runtime.getTypeByName("struct.scope")->getPointerTo();
+	var_type = runtime.getTypeByName("struct.var");
+	variant_type = runtime.getTypeByName("struct.variant");
+
+	ret_type = StructType::get(builder.getInt8Ty(), builder.getInt64Ty(), NULL);
 
 	real_type = builder.getDoubleTy();
-
 	string_type = runtime.getTypeByName("struct.string")->getPointerTo();
-	variant_type = runtime.getTypeByName("struct.variant");
-	var_type = runtime.getTypeByName("struct.var");
-	scope_type = runtime.getTypeByName("struct.scope")->getPointerTo();
 
 	union_diff =
 		dl.getTypeAllocSize(real_type) - dl.getTypeAllocSize(string_type);
@@ -144,7 +147,7 @@ Function *node_codegen::add_function(
 		builder.CreateCall(release_var, it->second);
 	}
 
-	Value *ret = builder.CreateLoad(return_value);
+	Value *ret = builder.CreateLoad(builder.CreateBitCast(return_value, ret_type->getPointerTo()));
 	builder.CreateRet(ret);
 
 	return function;
@@ -201,8 +204,8 @@ Value *node_codegen::visit_unary(unary *u) {
 	builder.CreateMemCpy(operand, visit(u->right), dl.getTypeStoreSize(variant_type), 0);
 
 	CallInst *call = builder.CreateCall(get_operator(name, 1), operand);
-
-	builder.CreateStore(call, result);
+	Value *ret = builder.CreateBitCast(result, ret_type->getPointerTo());
+	builder.CreateStore(call, ret);
 	return result;
 }
 
@@ -261,8 +264,8 @@ Value *node_codegen::visit_binary(binary *b) {
 	builder.CreateMemCpy(right, visit(b->right), dl.getTypeStoreSize(variant_type), 0);
 
 	CallInst *call = builder.CreateCall2(get_operator(name, 2), left, right);
-
-	builder.CreateStore(call, result);
+	Value *ret = builder.CreateBitCast(result, ret_type->getPointerTo());
+	builder.CreateStore(call, ret);
 	return result;
 }
 
@@ -344,9 +347,8 @@ Value *node_codegen::visit_call(call *c) {
 	if (var) args.push_back(array);
 
 	CallInst *call = builder.CreateCall(function, args);
-	call->addAttribute(1, Attribute::StructRet);
-
-	builder.CreateStore(call, result);
+	Value *ret = builder.CreateBitCast(result, ret_type->getPointerTo());
+	builder.CreateStore(call, ret);
 	return result;
 }
 
@@ -723,7 +725,9 @@ Value *node_codegen::visit_jump(jump *j) {
 }
 
 Value *node_codegen::visit_returnstatement(returnstatement *r) {
-	builder.CreateRet(builder.CreateLoad(visit(r->expr)));
+	Value *ret = visit(r->expr);
+	Value *ptr = builder.CreateBitCast(ret, ret_type->getPointerTo());
+	builder.CreateRet(builder.CreateLoad(ptr));
 
 	Function *f = builder.GetInsertBlock()->getParent();
 	BasicBlock *cont = BasicBlock::Create(f->getContext(), "cont", f);
@@ -736,11 +740,10 @@ Function *node_codegen::get_operator(StringRef name, int args) {
 	Function *function = module.getFunction(name);
 	if (function) return function;
 
-	std::vector<Type*> vargs(args, variant_type->getPointerTo());
-	FunctionType *type = FunctionType::get(variant_type, vargs, false);
-	function = Function::Create(type, Function::ExternalLinkage, name, &module);
-
-	return function;
+	return Function::Create(
+		runtime.getFunction(name)->getFunctionType(),
+		Function::ExternalLinkage, name, &module
+	);
 }
 
 Function *node_codegen::get_function(StringRef name, int args, bool var) {
@@ -753,7 +756,7 @@ Function *node_codegen::get_function(StringRef name, int args, bool var) {
 	vargs[0] = vargs[1] = scope_type;
 	if (var) vargs[2] = builder.getInt16Ty();
 
-	FunctionType *type = FunctionType::get(variant_type, vargs, false);
+	FunctionType *type = FunctionType::get(ret_type, vargs, false);
 	function = Function::Create(type, Function::ExternalLinkage, name, &module);
 
 	Function::arg_iterator ai = function->arg_begin();
@@ -855,7 +858,7 @@ Value *node_codegen::is_equal(Value *a, Value *b) {
 }
 
 Value *node_codegen::make_local(StringRef name, Value *value) {
-	return make_local(name, builder.getInt16(1), builder.getInt16(1), value);
+	return make_local(name, builder.getInt16(0), builder.getInt16(0), value);
 }
 
 Value *node_codegen::make_local(

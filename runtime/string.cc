@@ -10,10 +10,11 @@ extern "C" variant string(
 ) {
 	switch (val.type) {
 	case 0: {
-		int length = snprintf(nullptr, 0, "%f", val.real) - 1; // we don't want the \0
-		struct string *str = new (length) struct string(length);
+		// TODO: replace snprintf so we don't have to allocate one extra byte?
+		int length = snprintf(nullptr, 0, "%g", val.real);
+		struct string *str = new (length + 1) struct string(length);
 
-		snprintf(str->data, length, "%f", val.real);
+		snprintf(str->data, length + 1, "%g", val.real);
 		str->hash = string::compute_hash(str->length, str->data);
 
 		struct string *ret = strings.intern(str);

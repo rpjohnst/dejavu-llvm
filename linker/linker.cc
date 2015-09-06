@@ -56,9 +56,14 @@ bool linker::build(const char *target, bool debug) {
 	if (errors.count() > 0) return false;
 
 	Module &game = compiler.get_module();
-	if (verifyModule(game)) {
-		errors.error("module is broken\n");
-		return false;
+	{
+		SmallString<80> str;
+		raw_svector_ostream error(str);
+		if (verifyModule(game, &error)) {
+			game.dump();
+			errors.error(error.str());
+			return false;
+		}
 	}
 
 	if (!debug) {
