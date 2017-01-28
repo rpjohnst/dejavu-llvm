@@ -10,6 +10,7 @@ DejaVu is a free, open source implementation of [GameMaker](http://yoyogames.com
 DejaVu is currently a work in progress. You can't use it yet, but the source is available [on GitHub](http://github.com/rpjohnst/dejavu-llvm).
 
 What DejaVu is currently capable of:
+
 * Getting game data from [LateralGM](http://lateralgm.org) through a plugin
 * Compiling GML and D&D actions in scripts and object events using LLVM
 * Linking with a barebones GML runtime library
@@ -18,6 +19,7 @@ What DejaVu is currently capable of:
     - local, self, other, and global scope lookup
 
 What's next:
+
 * Accessors like `argument0`, `direction`/`speed` and `hspeed`/`vspeed`
 * Object/instance access, `with` statements
 * The GML standard library and game engine
