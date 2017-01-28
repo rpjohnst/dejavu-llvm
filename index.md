@@ -7,7 +7,7 @@ title: Home
 DejaVu is a free, open source implementation of [GameMaker](http://yoyogames.com). It allows you to design and build quality games quickly and without code. You can do anything with the games you create, for free. DejaVu exports games to Windows, OS X, Linux, Android, and iOS.
 
 ### Current Status
-DejaVu is currently a work in progress. You can't use it yet, but the source is available [on GitHub](http://github.com/rpjohnst/dejavu).
+DejaVu is currently a work in progress. You can't use it yet, but the source is available [on GitHub](http://github.com/rpjohnst/dejavu-llvm).
 
 What DejaVu is currently capable of:
 * Getting game data from [LateralGM](http://lateralgm.org) through a plugin
