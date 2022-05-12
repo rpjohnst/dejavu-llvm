@@ -12,7 +12,7 @@ As a work in progress, DejaVu does not currently distribute compiled binaries. T
 * [Clang](http://clang.llvm.org) - Clang is required to build the language runtime
 * [GNU Make](http://www.gnu.org/software/make/) - the compiler's Makefiles are based on GNU Make
 * [SWIG](http://www.swig.org) - SWIG is used to generate the bridge between the plugin and compiler
-* [Java Developmen Kit](http://www.oracle.com/technetwork/java/javase/downloads/index.html) - the LateralGM plugin is written in Java
+* [Java Development Kit](http://www.oracle.com/technetwork/java/javase/downloads/index.html) - the LateralGM plugin is written in Java
 * [Ant](http://ant.apache.org/) - Ant is used to compile the LateralGM plugin
 
 ### Windows
